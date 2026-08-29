@@ -114,6 +114,79 @@ def _align_g(grid):
     return ag
 
 
+def _align_sd(grid, types):
+    from tiles import np_pairs
+    if not grid or not grid[0]:
+        return 0
+    W, asd = len(grid[0]), 0
+    for nr, pr in np_pairs(types):
+        for c in range(W):
+            a = grid[nr][c] if c < len(grid[nr]) else None
+            b = grid[pr][c] if c < len(grid[pr]) else None
+            if not a or not b:
+                continue
+            if a[1] == b[1]:
+                asd += 1
+            if a[3] == b[3]:
+                asd += 1
+    return asd
+
+
+def _power_cuts(grid, rails):
+    """Insert-before indices where a row has rail facing rail (VDD-VDD / VSS-VSS)."""
+    W = len(grid[0]) if grid else 0
+    scored = []
+    for i in range(1, W):
+        npp = n1 = 0
+        for row in grid:
+            a = row[i - 1] if i - 1 < len(row) else None
+            b = row[i] if i < len(row) else None
+            if not a or not b:
+                continue
+            left, right = a[3], b[1]
+            if left in rails and right in rails:
+                npp += 1
+            elif left in rails or right in rails:
+                n1 += 1
+        if npp or n1:
+            scored.append((-npp, -n1, i))
+    scored.sort()
+    return [i for _a, _b, i in scored]
+
+
+def _insert_col(grid, i):
+    return [list(row[:i]) + [None] + list(row[i:]) for row in grid]
+
+
+def _insert_power_dummies(grid, types, pininfo, n_extra):
+    """Add n_extra dummy columns between power nets. Keep a dummy only if
+    align_g and align_sd do not fall."""
+    if n_extra <= 0 or not grid:
+        return grid, 0
+    rails = {p for p, r in pininfo.items() if r in ('P', 'G')}
+    g = [list(row) for row in grid]
+    placed = 0
+    for _ in range(n_extra):
+        ag0, asd0 = _align_g(g), _align_sd(g, types)
+        cuts = _power_cuts(g, rails)
+        if not cuts:
+            break
+        best = None
+        for i in cuts:
+            g2 = _insert_col(g, i)
+            ag, asd = _align_g(g2), _align_sd(g2, types)
+            if ag < ag0 or asd < asd0:
+                continue
+            key = (ag, asd)
+            if best is None or key > best[0]:
+                best = (key, g2)
+        if best is None:
+            break
+        g = best[1]
+        placed += 1
+    return g, placed
+
+
 def _combine_pairs(pair_lists, pairs, types, tops_k=16, target_W=None):
     combined = []
     if not pair_lists or not all(pair_lists):
@@ -201,7 +274,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     tg_names = score.tg_device_names(cell.devices)
     pairs = tiles.np_pairs(types)
     req = dumNumAdd
-    cap = req + 5
+    cap = 5
     skip = set(tiles.rails(cell.pininfo))
     if len(pairs) > 1:
         skip |= set(cell.pininfo)
@@ -247,8 +320,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             t1s += t1
             t2s += t2
             pair_lists.append(cands)
-        combined.extend(_combine_pairs(pair_lists, pairs, types, tops_k,
-                                          target_W=(wmin + req) if req else None))
+        combined.extend(_combine_pairs(pair_lists, pairs, types, tops_k))
     t_total = t1s + t2s
     if hard:
         print('hard beam=%s tops=%d packings=%d' % (bcap or 256, tops_k, len(seen_pack)))
@@ -264,40 +336,51 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             if good:
                 ok.append((grid, ft))
         combined = ok
+    used = req
+    if req and combined:
+        combined = [(*_insert_power_dummies(g, types, cell.pininfo, req), ft)
+                    for g, ft in combined]
+        # _insert returns (grid, n); reshape to (grid, ft, n)
+        combined = [(g, ft, n) for g, n, ft in combined]
+    else:
+        combined = [(g, ft, 0) for g, ft in combined]
     prefer_wide = req > 0
     SCORE_CAP = 8192 if hard else 1024
     if len(combined) > SCORE_CAP:
         if prefer_wide:
-            keyed = [(-len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
+            keyed = [(-_align_g(g), -len(g[0]), g, ft, n) for g, ft, n in combined]
         else:
-            keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
+            keyed = [(len(g[0]), -_align_g(g), g, ft, n) for g, ft, n in combined]
         keyed.sort(key=lambda x: (x[0], x[1]))
-        combined = [(g, ft) for _, _, g, ft in keyed[:SCORE_CAP]]
+        combined = [(g, ft, n) for _, _, g, ft, n in keyed[:SCORE_CAP]]
     scored = []
-    for grid, ft in combined:
+    for grid, ft, nins in combined:
         m = score.metrics(grid, types, cell.pininfo, tracks, end_nets, tg_names)
         m['first_type'] = ft
+        m['_nins'] = nins
         m['grid'] = {'types': types, 'cells': grid, 'pininfo': cell.pininfo,
                     'odd_nets': {k: list(v) for k, v in end_nets.items()}}
         m['_cost'] = score.cost_tuple(m, prefer_wide=prefer_wide)
         scored.append(m)
     scored.sort(key=lambda m: m['_cost'])
 
-    used = req
     pool = []
-    while used <= req + 5:
-        pool = [m for m in scored if m['W'] <= wmin + used]
-        if pool:
-            break
-        used += 1
-    if not pool and scored:
-        used = min(req + 5, max(m['W'] - wmin for m in scored))
-        pool = [m for m in scored if m['W'] <= wmin + used]
-    if used != req and pool:
-        print('dumNumAdd %d empty, using %d' % (req, used))
+    if req:
+        pool = list(scored)
+    else:
+        while used <= req + 5:
+            pool = [m for m in scored if m['W'] <= wmin + used]
+            if pool:
+                break
+            used += 1
+        if not pool and scored:
+            used = min(req + 5, max(m['W'] - wmin for m in scored))
+            pool = [m for m in scored if m['W'] <= wmin + used]
+        if used != req and pool:
+            print('dumNumAdd %d empty, using %d' % (req, used))
     by_cost = pool[:TABLE]
     extra = []
-    if pool and not prefer_wide:
+    if pool:
         mx = max(m['align_g'] for m in pool)
         extra = [m for m in pool if m['align_g'] == mx]
     seen, merged = set(), []
@@ -308,6 +391,10 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         seen.add(k)
         merged.append(m)
     pool = merged[:TABLE * 2]
+    if req and pool:
+        used = pool[0].get('_nins', req)
+        if used != req:
+            print('dumNumAdd %d, #1 placed %d (stopped at power cuts)' % (req, used))
     meta = dict(cell=cell.name, cdl=os.path.abspath(cdl_path), rows=rows, pattern=pattern,
                 tracks=tracks, threshold=threshold, routability=routability, first=first,
                 dumNumAdd_requested=req, dumNumAdd_used=used,
