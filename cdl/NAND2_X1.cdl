@@ -1,0 +1,11 @@
+************************************************************************
+* Cell:    NAND2_X1
+* Function: 2-input NAND
+************************************************************************
+.SUBCKT NAND2_X1 A B Z VDD VSS
+.PININFO A:I B:I Z:O VDD:P VSS:G
+MpA Z A VDD VDD PMOS W=0.40U L=0.05U
+MpB Z B VDD VDD PMOS W=0.40U L=0.05U
+MnA n1 A VSS VSS NMOS W=0.20U L=0.05U
+MnB Z  B n1  VSS NMOS W=0.20U L=0.05U
+.ENDS NAND2_X1

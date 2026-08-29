@@ -1,0 +1,9 @@
+************************************************************************
+* Cell:    INV_X1
+* Function: Inverter
+************************************************************************
+.SUBCKT INV_X1 A Z VDD VSS
+.PININFO A:I Z:O VDD:P VSS:G
+Mp Z A VDD VDD PMOS W=0.40U L=0.05U
+Mn Z A VSS VSS NMOS W=0.20U L=0.05U
+.ENDS INV_X1

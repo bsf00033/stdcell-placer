@@ -1,0 +1,25 @@
+************************************************************************
+* Cell:    NAND4_D2
+* Function: 4-input NAND, drive 2 (two fingers)
+* N .1: Z-A-n1-B-n2-C-n3-D-VSS
+* N .2: Z-B-n11-A-n12-C-n13-D-VSS
+************************************************************************
+.SUBCKT NAND4_D2 A B C D Z VDD VSS
+.PININFO A:I B:I C:I D:I Z:O VDD:P VSS:G
+MpA.1 Z A VDD VDD PMOS W=0.40U L=0.05U
+MpA.2 Z A VDD VDD PMOS W=0.40U L=0.05U
+MpB.1 Z B VDD VDD PMOS W=0.40U L=0.05U
+MpB.2 Z B VDD VDD PMOS W=0.40U L=0.05U
+MpC.1 Z C VDD VDD PMOS W=0.40U L=0.05U
+MpC.2 Z C VDD VDD PMOS W=0.40U L=0.05U
+MpD.1 Z D VDD VDD PMOS W=0.40U L=0.05U
+MpD.2 Z D VDD VDD PMOS W=0.40U L=0.05U
+MnA.1 Z   A n1  VSS NMOS W=0.20U L=0.05U
+MnB.1 n1  B n2  VSS NMOS W=0.20U L=0.05U
+MnC.1 n2  C n3  VSS NMOS W=0.20U L=0.05U
+MnD.1 n3  D VSS VSS NMOS W=0.20U L=0.05U
+MnB.2 Z   B n11 VSS NMOS W=0.20U L=0.05U
+MnA.2 n11 A n12 VSS NMOS W=0.20U L=0.05U
+MnC.2 n12 C n13 VSS NMOS W=0.20U L=0.05U
+MnD.2 n13 D VSS VSS NMOS W=0.20U L=0.05U
+.ENDS NAND4_D2

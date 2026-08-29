@@ -1,0 +1,94 @@
+************************************************************************
+* Cell:    SDFFQ_X1
+* Function: Scan D flip-flop, Q only, positive-edge triggered
+* Pins:     D SI SE CK Q VDD VSS
+*
+* Topology: 26 MOS (SE inv, CK buffer, scan mux, master, slave)
+*   1. SE inverter          -> SEb
+*   2. CK  two-inv buffer   -> CKN (inverted), CKI (buffered true)
+*   3. Scan 2:1 mux (TGs)   SE=0 selects D, SE=1 selects SI  -> n_mux
+*   4. Master latch         transparent while CKI=0
+*        TG: n_mux -> n_m     (on CKI=0)
+*        INV: n_m  -> n_mb
+*        clocked keeper       (on CKI=1)
+*   5. Slave latch          transparent while CKI=1
+*        TG: n_mb  -> n_s     (on CKI=1)
+*        INV: n_s  -> Q       so Q = D after a rising CK edge
+*        clocked keeper       (on CKI=0)
+*
+* Sizing is generic (L=50n). Remap models/W/L to your PDK.
+* Keepers are drawn weaker than the pass TGs so the TGs win
+* during the transparent phase.
+*
+* Truth (rising CK):
+*   SE=0 -> Q+ = D
+*   SE=1 -> Q+ = SI
+************************************************************************
+.SUBCKT SDFFQ_X1 D SI SE CK Q VDD VSS
+*.PININFO D:I SI:I SE:I CK:I Q:O VDD:P VSS:G
+.PININFO D:I SI:I SE:I CK:I Q:O VDD:P VSS:G
+
+*----------------------------------------------------------------
+* Local clocks and scan-enable bar
+*----------------------------------------------------------------
+* SE -> SEb
+Mse_p  SEb SE VDD VDD PMOS W=0.40U L=0.05U
+Mse_n  SEb SE VSS VSS NMOS W=0.20U L=0.05U
+
+* CK -> CKN -> CKI
+Mckn_p CKN CK  VDD VDD PMOS W=0.60U L=0.05U
+Mckn_n CKN CK  VSS VSS NMOS W=0.30U L=0.05U
+Mcki_p CKI CKN VDD VDD PMOS W=0.60U L=0.05U
+Mcki_n CKI CKN VSS VSS NMOS W=0.30U L=0.05U
+
+*----------------------------------------------------------------
+* Scan mux: n_mux = SE ? SI : D
+* TG_D  on when SE=0 (NMOS gated by SEb, PMOS gated by SE)
+* TG_SI on when SE=1 (NMOS gated by SE,  PMOS gated by SEb)
+*----------------------------------------------------------------
+MtgD_n  n_mux SEb D  VSS NMOS W=0.20U L=0.05U
+MtgD_p  n_mux SE  D  VDD PMOS W=0.40U L=0.05U
+MtgSI_n n_mux SE  SI VSS NMOS W=0.20U L=0.05U
+MtgSI_p n_mux SEb SI VDD PMOS W=0.40U L=0.05U
+
+*----------------------------------------------------------------
+* Master latch (transparent when CKI=0)
+*----------------------------------------------------------------
+* Pass TG: n_mux -> n_m
+MtgM_n n_m CKN  n_mux VSS NMOS W=0.20U L=0.05U
+MtgM_p n_m CKI  n_mux VDD PMOS W=0.40U L=0.05U
+
+* Inverter: n_m -> n_mb
+Mminv_p n_mb n_m VDD VDD PMOS W=0.40U L=0.05U
+Mminv_n n_mb n_m VSS VSS NMOS W=0.20U L=0.05U
+
+* Clocked keeper (enabled CKI=1): n_mb -> n_m
+*     VDD -- Mmk_p1(n_mb) -- n_mk -- Mmk_p2(CKN) -- n_m
+*     VSS -- Mmk_n1(n_mb) -- n_mnk -- Mmk_n2(CKI) -- n_m
+Mmk_p1 n_mk  n_mb VDD  VDD PMOS W=0.24U L=0.05U
+Mmk_p2 n_m   CKN  n_mk VDD PMOS W=0.24U L=0.05U
+Mmk_n2 n_m   CKI  n_mnk VSS NMOS W=0.12U L=0.05U
+Mmk_n1 n_mnk n_mb VSS  VSS NMOS W=0.12U L=0.05U
+
+*----------------------------------------------------------------
+* Slave latch (transparent when CKI=1)
+* n_s samples n_mb, so n_s = ~D after the rising edge
+* Q = ~n_s = D
+*----------------------------------------------------------------
+* Pass TG: n_mb -> n_s
+MtgS_n n_s CKI n_mb VSS NMOS W=0.20U L=0.05U
+MtgS_p n_s CKN n_mb VDD PMOS W=0.40U L=0.05U
+
+* Output inverter: n_s -> Q
+Mq_p Q n_s VDD VDD PMOS W=0.80U L=0.05U
+Mq_n Q n_s VSS VSS NMOS W=0.40U L=0.05U
+
+* Clocked keeper (enabled CKI=0): Q -> n_s
+*     VDD -- Msk_p1(Q) -- n_sk -- Msk_p2(CKI) -- n_s
+*     VSS -- Msk_n1(Q) -- n_snk -- Msk_n2(CKN) -- n_s
+Msk_p1 n_sk  Q    VDD  VDD PMOS W=0.24U L=0.05U
+Msk_p2 n_s   CKI  n_sk VDD PMOS W=0.24U L=0.05U
+Msk_n2 n_s   CKN  n_snk VSS NMOS W=0.12U L=0.05U
+Msk_n1 n_snk Q    VSS  VSS NMOS W=0.12U L=0.05U
+
+.ENDS SDFFQ_X1

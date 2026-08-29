@@ -1,0 +1,9 @@
+************************************************************************
+* Cell:    TG_X1
+* Function: CMOS transmission gate
+************************************************************************
+.SUBCKT TG_X1 EN ENb A Z VDD VSS
+.PININFO EN:I ENb:I A:I Z:I VDD:P VSS:G
+Mn Z EN  A VSS NMOS W=0.20U L=0.05U
+Mp Z ENb A VDD PMOS W=0.40U L=0.05U
+.ENDS TG_X1
