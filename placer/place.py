@@ -28,22 +28,30 @@ def _orders(first, tn, tp):
 
 
 
-def _phase2_job(job):
-    ac, b, a, frozen, max_w, routability, cap, packed, half_dummy = job
+_P2 = None
+
+
+def _phase2_ac(ac):
+    b, a, frozen, max_w, routability, cap, packed, half_dummy = _P2
     return match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed, half_dummy=half_dummy)
 
 
 def _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed, half_dummy=False):
-    """Independent type-B matches; process pool when the batch is large."""
+    """Independent type-B matches; process pool when the batch is large.
+
+    Workers inherit tiles via fork so we only ship each skeleton `ac`,
+    not a pickled copy of the brick list per job.
+    """
     n = len(a_cols)
     ncpu = os.cpu_count() or 1
     if n < 24 or ncpu < 2 or len(b) < 4:
         return [match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed, half_dummy=half_dummy)
                 for ac in a_cols]
-    jobs = [(ac, b, a, frozen, max_w, routability, cap, packed, half_dummy) for ac in a_cols]
+    global _P2
+    _P2 = (b, a, frozen, max_w, routability, cap, packed, half_dummy)
     ctx = multiprocessing.get_context('fork')
     with ctx.Pool(ncpu) as pool:
-        return pool.map(_phase2_job, jobs, chunksize=max(1, n // (ncpu * 4)))
+        return pool.map(_phase2_ac, a_cols, chunksize=max(1, n // (ncpu * 4)))
 
 
 def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets, rails=None, cap=None, packed=False, half_dummy=False):
@@ -213,7 +221,12 @@ def _combine_pairs(pair_lists, pairs, types, tops_k=16, target_W=None):
         for ft in by:
             out.extend(by[ft][:k])
         return out or lst[:k]
-    tops = [_pair_tops(lst) for lst in pair_lists]
+    npr = max(1, len(pairs))
+    k = tops_k
+    if npr >= 3:
+        while k > 4 and k ** npr > 512:
+            k -= 1
+    tops = [_pair_tops(lst, k) for lst in pair_lists]
     import itertools
 
     def variants(n, p):
