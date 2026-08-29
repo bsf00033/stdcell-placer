@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, sys, time
+import argparse, json, os, sys, time, multiprocessing
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cdl, tiles, beam, match, score, ascii, db as DBmod
 
@@ -27,6 +27,25 @@ def _orders(first, tn, tp):
     return ['N'] if len(tn) <= len(tp) else ['P']
 
 
+
+def _phase2_job(job):
+    ac, b, a, frozen, max_w, routability, cap, packed = job
+    return match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed)
+
+
+def _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed):
+    """Independent type-B matches; process pool when the batch is large."""
+    n = len(a_cols)
+    ncpu = os.cpu_count() or 1
+    if n < 24 or ncpu < 2 or len(b) < 4:
+        return [match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed)
+                for ac in a_cols]
+    jobs = [(ac, b, a, frozen, max_w, routability, cap, packed) for ac in a_cols]
+    ctx = multiprocessing.get_context('fork')
+    with ctx.Pool(ncpu) as pool:
+        return pool.map(_phase2_job, jobs, chunksize=max(1, n // (ncpu * 4)))
+
+
 def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets, rails=None, cap=None, packed=False):
     """Two-phase beam on one NP pair. Returns (cands, t1, t2).
     cand = (n_cols, p_cols, first_type)"""
@@ -39,8 +58,8 @@ def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets,
         t1 += time.perf_counter() - t0
         t0 = time.perf_counter()
         a_cols = list(dict.fromkeys(a_cols))
-        for ac in a_cols:
-            bcs = match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed)
+        bcs_list = _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed)
+        for ac, bcs in zip(a_cols, bcs_list):
             for bc in bcs:
                 W = max(len(ac), len(bc))
                 if ft == 'N':
@@ -188,6 +207,11 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             for g in best_grids:
                 combined.append((g, best_ft))
 
+    SCORE_CAP = 1024
+    if len(combined) > SCORE_CAP:
+        keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
+        keyed.sort(key=lambda x: (x[0], x[1]))
+        combined = [(g, ft) for _, _, g, ft in keyed[:SCORE_CAP]]
     scored = []
     for grid, ft in combined:
         m = score.metrics(grid, types, cell.pininfo, tracks, end_nets, tg_names)
