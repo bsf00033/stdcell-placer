@@ -62,22 +62,37 @@ def fabric_uf(rows, pairs):
 
 
 def route_demand(rows, pairs, pininfo, tracks):
-    """overflow, max congestion, residual WL from leftover metal spans."""
+    """overflow, max congestion, residual WL from leftover metal spans.
+
+    Demand and rail taps are per NP-pair column. tracks is the budget for
+    one pair. CMOS-stacked AABB then gives A and B each that pair's tracks;
+    AAAB puts A and B in the same pair-column and they share the budget.
+    """
     rails = {p for p, r in pininfo.items() if r in ('P', 'G')}
     W = len(rows[0]) if rows else 0
     uf = fabric_uf(rows, pairs)
+    nP = max(1, len(pairs))
+    row_pair = {}
+    if pairs:
+        for i, (nr, pr) in enumerate(pairs):
+            row_pair[nr] = i
+            row_pair[pr] = i
+    else:
+        for r in range(len(rows)):
+            row_pair[r] = 0
     sites = defaultdict(list)
-    tapset = [set() for _ in range(W)]
+    tapset = [ [set() for _ in range(W)] for _ in range(nP) ]
     for r, row in enumerate(rows):
         for c, sl in enumerate(row):
             if not sl:
                 continue
             for k in (1, 2, 3):
                 sites[sl[k]].append((r, c, k))
+            pi = row_pair[r]
             for k in (1, 3):
                 if sl[k] in rails:
-                    tapset[c].add(sl[k])
-    demand = [0] * W
+                    tapset[pi][c].add(sl[k])
+    demand = [ [0] * W for _ in range(nP) ]
     wl = 0
     for net, sts in sites.items():
         if net in rails:
@@ -91,13 +106,22 @@ def route_demand(rows, pairs, pininfo, tracks):
         cols = [c for r, c, k in sts]
         lo, hi = min(cols), max(cols)
         wl += hi - lo
-        for c in range(lo, hi + 1):
-            demand[c] += 1
+        pair_cols = [[] for _ in range(nP)]
+        for r, c, k in sts:
+            pair_cols[row_pair[r]].append(c)
+        for pi, cs in enumerate(pair_cols):
+            if not cs:
+                continue
+            plo, phi = min(cs), max(cs)
+            for c in range(plo, phi + 1):
+                demand[pi][c] += 1
     ovf = 0
-    cong = max(demand) if demand else 0
-    for c in range(W):
-        supply = tracks - len(tapset[c])
-        ovf = max(ovf, max(0, demand[c] - supply))
+    cong = 0
+    for pi in range(nP):
+        for c in range(W):
+            cong = max(cong, demand[pi][c])
+            supply = tracks - len(tapset[pi][c])
+            ovf = max(ovf, max(0, demand[pi][c] - supply))
     return ovf, cong, wl
 
 
