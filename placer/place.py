@@ -29,24 +29,24 @@ def _orders(first, tn, tp):
 
 
 def _phase2_job(job):
-    ac, b, a, frozen, max_w, routability, cap, packed = job
-    return match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed)
+    ac, b, a, frozen, max_w, routability, cap, packed, half_dummy = job
+    return match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed, half_dummy=half_dummy)
 
 
-def _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed):
+def _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed, half_dummy=False):
     """Independent type-B matches; process pool when the batch is large."""
     n = len(a_cols)
     ncpu = os.cpu_count() or 1
     if n < 24 or ncpu < 2 or len(b) < 4:
-        return [match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed)
+        return [match.phase2(ac, b, a, frozen, max_w, routability, cap=cap, packed=packed, half_dummy=half_dummy)
                 for ac in a_cols]
-    jobs = [(ac, b, a, frozen, max_w, routability, cap, packed) for ac in a_cols]
+    jobs = [(ac, b, a, frozen, max_w, routability, cap, packed, half_dummy) for ac in a_cols]
     ctx = multiprocessing.get_context('fork')
     with ctx.Pool(ncpu) as pool:
         return pool.map(_phase2_job, jobs, chunksize=max(1, n // (ncpu * 4)))
 
 
-def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets, rails=None, cap=None, packed=False):
+def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets, rails=None, cap=None, packed=False, half_dummy=False):
     """Two-phase beam on one NP pair. Returns (cands, t1, t2).
     cand = (n_cols, p_cols, first_type)"""
     t1 = t2 = 0.0
@@ -58,14 +58,14 @@ def _pair_search(tn, tp, frozen, first, max_w, threshold, routability, end_nets,
         t1 += time.perf_counter() - t0
         t0 = time.perf_counter()
         a_cols = list(dict.fromkeys(a_cols))
-        bcs_list = _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed)
+        bcs_list = _phase2_all(a_cols, b, a, frozen, max_w, routability, cap, packed, half_dummy)
         for ac, bcs in zip(a_cols, bcs_list):
             for bc in bcs:
                 W = max(len(ac), len(bc))
-                if ft == 'N':
-                    cands.append((_pad(ac, W), _pad(bc, W), ft))
-                else:
-                    cands.append((_pad(bc, W), _pad(ac, W), ft))
+                nc, pc = (_pad(ac, W), _pad(bc, W)) if ft == 'N' else (_pad(bc, W), _pad(ac, W))
+                if not half_dummy and not match.occupancy_ok(nc, pc):
+                    continue
+                cands.append((nc, pc, ft))
         t2 += time.perf_counter() - t0
     return cands, t1, t2
 
@@ -115,7 +115,8 @@ def _align_g(grid):
 
 
 def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
-          routability=0.0, first='auto', dumNumAdd=0, db='place.db', bruteForce=False):
+          routability=0.0, first='auto', dumNumAdd=0, db='place.db', bruteForce=False,
+          halfDummy=False):
     if pattern not in ('NPPN', 'PNNP'):
         raise SystemExit('pattern must be NPPN or PNNP')
     cell = cdl.parse(cdl_path)
@@ -151,7 +152,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             continue
         bcap = 50000 if bruteForce else None
         cands, t1, t2 = _pair_search(tn, tp, b['F'], first, max_w, threshold, routability, end_nets,
-                                       score.rails_of(cell.pininfo), cap=bcap, packed=bruteForce)
+                                       score.rails_of(cell.pininfo), cap=bcap, packed=bruteForce,
+                                       half_dummy=halfDummy)
         t1s += t1
         t2s += t2
         pair_lists.append(cands)
@@ -223,6 +225,17 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             for g in best_grids:
                 combined.append((g, best_ft))
 
+    if not halfDummy and pairs:
+        ok = []
+        for grid, ft in combined:
+            good = True
+            for nr, pr in pairs:
+                if not match.occupancy_ok(grid[nr], grid[pr]):
+                    good = False
+                    break
+            if good:
+                ok.append((grid, ft))
+        combined = ok
     SCORE_CAP = 1024
     if len(combined) > SCORE_CAP:
         keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
@@ -272,8 +285,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     cx.close()
     n = len(pool)
     wm = min((m['W'] for m in pool), default=None)
-    print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d' % (
-        rid, cell.name, pack, wbest, used, n))
+    print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d halfDummy=%d' % (
+        rid, cell.name, pack, wbest, used, n, int(halfDummy)))
     if wm is not None:
         slack = wm - wbest
         if slack > 0:
@@ -412,6 +425,8 @@ def main():
     g.add_argument('--dumNumAdd', type=int, default=0)
     g.add_argument('--db', default='place.db')
     g.add_argument('--bruteForce', action='store_true', help='no island bricks, enumerate')
+    g.add_argument('--halfDummy', action='store_true',
+                   help='allow a device facing a nil in the same NP-pair column (default: full dummy)')
     s = sub.add_parser('show')
     s.add_argument('--sort', default='cost')
     s.add_argument('--show', type=int, default=5, dest='nshow')
@@ -423,7 +438,7 @@ def main():
     a = p.parse_args()
     if a.cmd == 'gen':
         place(a.cdl, a.rows, a.pattern, a.tracks, a.threshold, a.routability,
-              a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce)
+              a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce, halfDummy=a.halfDummy)
     else:
         show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd)
 

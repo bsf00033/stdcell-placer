@@ -27,11 +27,25 @@ def _frozen_pos(cols_a, tiles_a):
     return pos
 
 
-def phase2(cols_a, tiles_b, tiles_a, frozen, max_w, routability, W_a=None, cap=None, packed=False):
-    """Match second type: place/flip/nil-skip. Frozen 4T forced once A placed its half."""
+def occupancy_ok(n_cols, p_cols):
+    """True if every column is a full dummy (both nil) or both occupied."""
+    W = max(len(n_cols), len(p_cols))
+    for c in range(W):
+        n = n_cols[c] if c < len(n_cols) else None
+        p = p_cols[c] if c < len(p_cols) else None
+        if bool(n) != bool(p):
+            return False
+    return True
+
+
+def phase2(cols_a, tiles_b, tiles_a, frozen, max_w, routability, W_a=None, cap=None, packed=False, half_dummy=False):
+    """Match second type: place/flip/nil-skip. Frozen 4T forced once A placed its half.
+    half_dummy: allow a device facing a nil in the same NP-pair column."""
     W_a = len(cols_a) if W_a is None else W_a
     if not tiles_b:
-        return [tuple([None] * W_a)]
+        if half_dummy or all(x is None for x in cols_a):
+            return [tuple([None] * W_a)]
+        return []
     byid = {t.tid: t for t in tiles_b}
     orients = {t.tid: (t.slots, flip_slots(t.slots)) for t in tiles_b}
     pos = _frozen_pos(cols_a, tiles_a)
@@ -75,6 +89,15 @@ def phase2(cols_a, tiles_b, tiles_a, frozen, max_w, routability, W_a=None, cap=N
                         n0 = pos[t.frozen_id][0] - cur
                         if n0 < 0:
                             continue
+                        if not half_dummy:
+                            bad = False
+                            for i in range(n0):
+                                a = cols_a[cur + i] if cur + i < W_a else None
+                                if a is not None:
+                                    bad = True
+                                    break
+                            if bad:
+                                continue
                         nil_opts = (n0,)
                     else:
                         budget = max_w - cur - ln
@@ -85,7 +108,20 @@ def phase2(cols_a, tiles_b, tiles_a, frozen, max_w, routability, W_a=None, cap=N
                         if max_free < 0:
                             max_free = 0
                         hi = budget if budget < max_free else max_free
-                        if packed:
+                        if not half_dummy:
+                            n_skip = 0
+                            while cur + n_skip < W_a and cols_a[cur + n_skip] is None:
+                                n_skip += 1
+                            if cur + n_skip + ln > W_a:
+                                continue
+                            if any(cols_a[cur + n_skip + i] is None for i in range(ln)):
+                                continue
+                            if n_skip == 0 and not abut:
+                                continue
+                            if n_skip > hi:
+                                continue
+                            nil_opts = (n_skip,)
+                        elif packed:
                             if abut:
                                 nil_opts = (0,)
                             elif hi >= 1:
@@ -159,6 +195,8 @@ def phase2(cols_a, tiles_b, tiles_a, frozen, max_w, routability, W_a=None, cap=N
         if len(cols) < W_a:
             cols = cols + (None,) * (W_a - len(cols))
         if len(cols) > max_w:
+            continue
+        if not half_dummy and not occupancy_ok(cols_a, cols):
             continue
         out.append(cols)
     return out[:capn]
