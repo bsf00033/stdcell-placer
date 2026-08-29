@@ -350,7 +350,7 @@ def _row_to_m(r, tracks=4):
 
 
 def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None,
-         dumNumAdd=None, export=None):
+         dumNumAdd=None, export=None, lib='lib'):
     cx = DBmod.connect(db)
     runrow, pls = DBmod.get_run(cx, run_id=run, cell=cell)
     cx.close()
@@ -437,9 +437,12 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
         bydev = {}
         if cdl_path and os.path.isfile(cdl_path):
             bydev = {d.name: d for d in cdl.parse(cdl_path).devices}
-        lines = [ascii.order_line(m['grid']['cells'], bydev) for m in pool]
+        hdr = '#%s %s schematic %s %s' % (
+            lib, runrow['cell'], runrow['dumNumAdd_requested'], runrow['threshold'])
+        body = [ascii.order_line(m['grid']['cells'], bydev) for m in pool]
+        lines = ['"%s"' % ln for ln in [hdr] + body]
         open(export, 'w').write('\n'.join(lines) + ('\n' if lines else ''))
-        print('export %d placements -> %s' % (len(lines), export))
+        print('export %d placements -> %s' % (len(body), export))
 
 
 def main():
@@ -468,14 +471,15 @@ def main():
     s.add_argument('--run', type=int)
     s.add_argument('--dumNumAdd', type=int, default=None)
     s.add_argument('--db', default='place.db')
-    s.add_argument('--export', help='write order.txt lines for the run (one placement per line)')
+    s.add_argument('--export', help='write quoted order.txt for the run')
+    s.add_argument('--lib', default='lib', help='libName in the export header')
     a = p.parse_args()
     if a.cmd == 'gen':
         place(a.cdl, a.rows, a.pattern, a.tracks, a.threshold, a.routability,
               a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce, halfDummy=a.halfDummy,
               hard=a.hard)
     else:
-        show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd, export=a.export)
+        show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd, export=a.export, lib=a.lib)
 
 
 if __name__ == '__main__':
