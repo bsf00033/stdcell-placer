@@ -203,17 +203,22 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         skip |= set(cell.pininfo)
     if hard and first == 'auto':
         first = 'both'
-    packings = [(False, 'NP')]
+    packings = [(False, 'NP', wmin)]
     if hard and len(pairs) > 1:
-        packings = [(False, 'NP'), (True, 'NP'), (False, 'PN'), (True, 'PN')]
+        packings = [
+            (False, 'NP', wmin), (True, 'NP', wmin),
+            (False, 'PN', wmin), (True, 'PN', wmin),
+            (False, 'NP', wmin + 1), (False, 'PN', wmin + 1),
+            (False, 'NP', None), (False, 'PN', None),
+        ]
     max_w = wmin + req if bruteForce else wmin + cap
-    bcap = 50000 if bruteForce else (1024 if hard else None)
-    tops_k = 32 if hard else 16
+    bcap = 50000 if bruteForce else (2048 if hard else None)
+    tops_k = 48 if hard else 16
     t1s = t2s = 0.0
     combined = []
     seen_pack = set()
-    for rev, tord in packings:
-        buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), wmin, skip,
+    for rev, tord, pw in packings:
+        buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), pw, skip,
                                      typ_order=tord, reverse=rev)
         key = tiles.fmt_bricks(buckets)
         if key in seen_pack:
@@ -222,7 +227,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         if len(seen_pack) == 1:
             print(key)
         elif hard:
-            print('hard packing reverse=%d order=%s' % (int(rev), tord))
+            print('hard packing reverse=%d order=%s width=%s' % (int(rev), tord, pw))
             print(key)
         pair_lists = []
         for pi, (nr, pr) in enumerate(pairs):
@@ -254,7 +259,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             if good:
                 ok.append((grid, ft))
         combined = ok
-    SCORE_CAP = 4096 if hard else 1024
+    SCORE_CAP = 8192 if hard else 1024
     if len(combined) > SCORE_CAP:
         keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
         keyed.sort(key=lambda x: (x[0], x[1]))
