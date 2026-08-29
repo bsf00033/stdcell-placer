@@ -1,0 +1,249 @@
+************************************************************************
+* Cell:    SDFFQ_X1_8
+* Function: 8-bit scan DFF (Q only). 8 x SDFFQ_X1 (26 MOS) plus
+*           3-stage CK prebuffer and 3-stage SE prebuffer (12 MOS).
+*           220 MOS. Scan chain SI -> Q0 -> ... -> Q7.
+************************************************************************
+.SUBCKT SDFFQ_X1_8 D0 D1 D2 D3 D4 D5 D6 D7 SI SE CK Q0 Q1 Q2 Q3 Q4 Q5 Q6 Q7 VDD VSS
+.PININFO D0:I D1:I D2:I D3:I D4:I D5:I D6:I D7:I SI:I SE:I CK:I Q0:O Q1:O Q2:O Q3:O Q4:O Q5:O Q6:O Q7:O VDD:P VSS:G
+
+* CK prebuffer: CK -> nck1 -> nck2 -> ck_d
+Mckpre1_p nck1 CK   VDD VDD PMOS W=0.80U L=0.05U
+Mckpre1_n nck1 CK   VSS VSS NMOS W=0.40U L=0.05U
+Mckpre2_p nck2 nck1 VDD VDD PMOS W=0.80U L=0.05U
+Mckpre2_n nck2 nck1 VSS VSS NMOS W=0.40U L=0.05U
+Mckpre3_p ck_d nck2 VDD VDD PMOS W=1.20U L=0.05U
+Mckpre3_n ck_d nck2 VSS VSS NMOS W=0.60U L=0.05U
+
+* SE prebuffer: SE -> nse1 -> nse2 -> se_d
+Msepre1_p nse1 SE   VDD VDD PMOS W=0.40U L=0.05U
+Msepre1_n nse1 SE   VSS VSS NMOS W=0.20U L=0.05U
+Msepre2_p nse2 nse1 VDD VDD PMOS W=0.40U L=0.05U
+Msepre2_n nse2 nse1 VSS VSS NMOS W=0.20U L=0.05U
+Msepre3_p se_d nse2 VDD VDD PMOS W=0.80U L=0.05U
+Msepre3_n se_d nse2 VSS VSS NMOS W=0.40U L=0.05U
+
+*---- bit 0  D=D0 SI=SI Q=Q0 ----
+M0_se_p n0_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M0_se_n n0_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M0_ckn_p n0_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M0_ckn_n n0_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M0_cki_p n0_CKI n0_CKN VDD VDD PMOS W=0.60U L=0.05U
+M0_cki_n n0_CKI n0_CKN VSS VSS NMOS W=0.30U L=0.05U
+M0_tgD_n n0_n_mux n0_SEb D0 VSS NMOS W=0.20U L=0.05U
+M0_tgD_p n0_n_mux se_d D0 VDD PMOS W=0.40U L=0.05U
+M0_tgSI_n n0_n_mux se_d SI VSS NMOS W=0.20U L=0.05U
+M0_tgSI_p n0_n_mux n0_SEb SI VDD PMOS W=0.40U L=0.05U
+M0_tgM_n n0_n_m n0_CKN n0_n_mux VSS NMOS W=0.20U L=0.05U
+M0_tgM_p n0_n_m n0_CKI n0_n_mux VDD PMOS W=0.40U L=0.05U
+M0_minv_p n0_n_mb n0_n_m VDD VDD PMOS W=0.40U L=0.05U
+M0_minv_n n0_n_mb n0_n_m VSS VSS NMOS W=0.20U L=0.05U
+M0_mk_p1 n0_n_mk n0_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M0_mk_p2 n0_n_m n0_CKN n0_n_mk VDD PMOS W=0.24U L=0.05U
+M0_mk_n2 n0_n_m n0_CKI n0_n_mnk VSS NMOS W=0.12U L=0.05U
+M0_mk_n1 n0_n_mnk n0_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M0_tgS_n n0_n_s n0_CKI n0_n_mb VSS NMOS W=0.20U L=0.05U
+M0_tgS_p n0_n_s n0_CKN n0_n_mb VDD PMOS W=0.40U L=0.05U
+M0_q_p Q0 n0_n_s VDD VDD PMOS W=0.80U L=0.05U
+M0_q_n Q0 n0_n_s VSS VSS NMOS W=0.40U L=0.05U
+M0_sk_p1 n0_n_sk Q0 VDD VDD PMOS W=0.24U L=0.05U
+M0_sk_p2 n0_n_s n0_CKI n0_n_sk VDD PMOS W=0.24U L=0.05U
+M0_sk_n2 n0_n_s n0_CKN n0_n_snk VSS NMOS W=0.12U L=0.05U
+M0_sk_n1 n0_n_snk Q0 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 1  D=D1 SI=Q0 Q=Q1 ----
+M1_se_p n1_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M1_se_n n1_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M1_ckn_p n1_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M1_ckn_n n1_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M1_cki_p n1_CKI n1_CKN VDD VDD PMOS W=0.60U L=0.05U
+M1_cki_n n1_CKI n1_CKN VSS VSS NMOS W=0.30U L=0.05U
+M1_tgD_n n1_n_mux n1_SEb D1 VSS NMOS W=0.20U L=0.05U
+M1_tgD_p n1_n_mux se_d D1 VDD PMOS W=0.40U L=0.05U
+M1_tgSI_n n1_n_mux se_d Q0 VSS NMOS W=0.20U L=0.05U
+M1_tgSI_p n1_n_mux n1_SEb Q0 VDD PMOS W=0.40U L=0.05U
+M1_tgM_n n1_n_m n1_CKN n1_n_mux VSS NMOS W=0.20U L=0.05U
+M1_tgM_p n1_n_m n1_CKI n1_n_mux VDD PMOS W=0.40U L=0.05U
+M1_minv_p n1_n_mb n1_n_m VDD VDD PMOS W=0.40U L=0.05U
+M1_minv_n n1_n_mb n1_n_m VSS VSS NMOS W=0.20U L=0.05U
+M1_mk_p1 n1_n_mk n1_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M1_mk_p2 n1_n_m n1_CKN n1_n_mk VDD PMOS W=0.24U L=0.05U
+M1_mk_n2 n1_n_m n1_CKI n1_n_mnk VSS NMOS W=0.12U L=0.05U
+M1_mk_n1 n1_n_mnk n1_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M1_tgS_n n1_n_s n1_CKI n1_n_mb VSS NMOS W=0.20U L=0.05U
+M1_tgS_p n1_n_s n1_CKN n1_n_mb VDD PMOS W=0.40U L=0.05U
+M1_q_p Q1 n1_n_s VDD VDD PMOS W=0.80U L=0.05U
+M1_q_n Q1 n1_n_s VSS VSS NMOS W=0.40U L=0.05U
+M1_sk_p1 n1_n_sk Q1 VDD VDD PMOS W=0.24U L=0.05U
+M1_sk_p2 n1_n_s n1_CKI n1_n_sk VDD PMOS W=0.24U L=0.05U
+M1_sk_n2 n1_n_s n1_CKN n1_n_snk VSS NMOS W=0.12U L=0.05U
+M1_sk_n1 n1_n_snk Q1 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 2  D=D2 SI=Q1 Q=Q2 ----
+M2_se_p n2_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M2_se_n n2_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M2_ckn_p n2_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M2_ckn_n n2_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M2_cki_p n2_CKI n2_CKN VDD VDD PMOS W=0.60U L=0.05U
+M2_cki_n n2_CKI n2_CKN VSS VSS NMOS W=0.30U L=0.05U
+M2_tgD_n n2_n_mux n2_SEb D2 VSS NMOS W=0.20U L=0.05U
+M2_tgD_p n2_n_mux se_d D2 VDD PMOS W=0.40U L=0.05U
+M2_tgSI_n n2_n_mux se_d Q1 VSS NMOS W=0.20U L=0.05U
+M2_tgSI_p n2_n_mux n2_SEb Q1 VDD PMOS W=0.40U L=0.05U
+M2_tgM_n n2_n_m n2_CKN n2_n_mux VSS NMOS W=0.20U L=0.05U
+M2_tgM_p n2_n_m n2_CKI n2_n_mux VDD PMOS W=0.40U L=0.05U
+M2_minv_p n2_n_mb n2_n_m VDD VDD PMOS W=0.40U L=0.05U
+M2_minv_n n2_n_mb n2_n_m VSS VSS NMOS W=0.20U L=0.05U
+M2_mk_p1 n2_n_mk n2_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M2_mk_p2 n2_n_m n2_CKN n2_n_mk VDD PMOS W=0.24U L=0.05U
+M2_mk_n2 n2_n_m n2_CKI n2_n_mnk VSS NMOS W=0.12U L=0.05U
+M2_mk_n1 n2_n_mnk n2_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M2_tgS_n n2_n_s n2_CKI n2_n_mb VSS NMOS W=0.20U L=0.05U
+M2_tgS_p n2_n_s n2_CKN n2_n_mb VDD PMOS W=0.40U L=0.05U
+M2_q_p Q2 n2_n_s VDD VDD PMOS W=0.80U L=0.05U
+M2_q_n Q2 n2_n_s VSS VSS NMOS W=0.40U L=0.05U
+M2_sk_p1 n2_n_sk Q2 VDD VDD PMOS W=0.24U L=0.05U
+M2_sk_p2 n2_n_s n2_CKI n2_n_sk VDD PMOS W=0.24U L=0.05U
+M2_sk_n2 n2_n_s n2_CKN n2_n_snk VSS NMOS W=0.12U L=0.05U
+M2_sk_n1 n2_n_snk Q2 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 3  D=D3 SI=Q2 Q=Q3 ----
+M3_se_p n3_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M3_se_n n3_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M3_ckn_p n3_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M3_ckn_n n3_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M3_cki_p n3_CKI n3_CKN VDD VDD PMOS W=0.60U L=0.05U
+M3_cki_n n3_CKI n3_CKN VSS VSS NMOS W=0.30U L=0.05U
+M3_tgD_n n3_n_mux n3_SEb D3 VSS NMOS W=0.20U L=0.05U
+M3_tgD_p n3_n_mux se_d D3 VDD PMOS W=0.40U L=0.05U
+M3_tgSI_n n3_n_mux se_d Q2 VSS NMOS W=0.20U L=0.05U
+M3_tgSI_p n3_n_mux n3_SEb Q2 VDD PMOS W=0.40U L=0.05U
+M3_tgM_n n3_n_m n3_CKN n3_n_mux VSS NMOS W=0.20U L=0.05U
+M3_tgM_p n3_n_m n3_CKI n3_n_mux VDD PMOS W=0.40U L=0.05U
+M3_minv_p n3_n_mb n3_n_m VDD VDD PMOS W=0.40U L=0.05U
+M3_minv_n n3_n_mb n3_n_m VSS VSS NMOS W=0.20U L=0.05U
+M3_mk_p1 n3_n_mk n3_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M3_mk_p2 n3_n_m n3_CKN n3_n_mk VDD PMOS W=0.24U L=0.05U
+M3_mk_n2 n3_n_m n3_CKI n3_n_mnk VSS NMOS W=0.12U L=0.05U
+M3_mk_n1 n3_n_mnk n3_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M3_tgS_n n3_n_s n3_CKI n3_n_mb VSS NMOS W=0.20U L=0.05U
+M3_tgS_p n3_n_s n3_CKN n3_n_mb VDD PMOS W=0.40U L=0.05U
+M3_q_p Q3 n3_n_s VDD VDD PMOS W=0.80U L=0.05U
+M3_q_n Q3 n3_n_s VSS VSS NMOS W=0.40U L=0.05U
+M3_sk_p1 n3_n_sk Q3 VDD VDD PMOS W=0.24U L=0.05U
+M3_sk_p2 n3_n_s n3_CKI n3_n_sk VDD PMOS W=0.24U L=0.05U
+M3_sk_n2 n3_n_s n3_CKN n3_n_snk VSS NMOS W=0.12U L=0.05U
+M3_sk_n1 n3_n_snk Q3 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 4  D=D4 SI=Q3 Q=Q4 ----
+M4_se_p n4_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M4_se_n n4_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M4_ckn_p n4_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M4_ckn_n n4_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M4_cki_p n4_CKI n4_CKN VDD VDD PMOS W=0.60U L=0.05U
+M4_cki_n n4_CKI n4_CKN VSS VSS NMOS W=0.30U L=0.05U
+M4_tgD_n n4_n_mux n4_SEb D4 VSS NMOS W=0.20U L=0.05U
+M4_tgD_p n4_n_mux se_d D4 VDD PMOS W=0.40U L=0.05U
+M4_tgSI_n n4_n_mux se_d Q3 VSS NMOS W=0.20U L=0.05U
+M4_tgSI_p n4_n_mux n4_SEb Q3 VDD PMOS W=0.40U L=0.05U
+M4_tgM_n n4_n_m n4_CKN n4_n_mux VSS NMOS W=0.20U L=0.05U
+M4_tgM_p n4_n_m n4_CKI n4_n_mux VDD PMOS W=0.40U L=0.05U
+M4_minv_p n4_n_mb n4_n_m VDD VDD PMOS W=0.40U L=0.05U
+M4_minv_n n4_n_mb n4_n_m VSS VSS NMOS W=0.20U L=0.05U
+M4_mk_p1 n4_n_mk n4_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M4_mk_p2 n4_n_m n4_CKN n4_n_mk VDD PMOS W=0.24U L=0.05U
+M4_mk_n2 n4_n_m n4_CKI n4_n_mnk VSS NMOS W=0.12U L=0.05U
+M4_mk_n1 n4_n_mnk n4_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M4_tgS_n n4_n_s n4_CKI n4_n_mb VSS NMOS W=0.20U L=0.05U
+M4_tgS_p n4_n_s n4_CKN n4_n_mb VDD PMOS W=0.40U L=0.05U
+M4_q_p Q4 n4_n_s VDD VDD PMOS W=0.80U L=0.05U
+M4_q_n Q4 n4_n_s VSS VSS NMOS W=0.40U L=0.05U
+M4_sk_p1 n4_n_sk Q4 VDD VDD PMOS W=0.24U L=0.05U
+M4_sk_p2 n4_n_s n4_CKI n4_n_sk VDD PMOS W=0.24U L=0.05U
+M4_sk_n2 n4_n_s n4_CKN n4_n_snk VSS NMOS W=0.12U L=0.05U
+M4_sk_n1 n4_n_snk Q4 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 5  D=D5 SI=Q4 Q=Q5 ----
+M5_se_p n5_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M5_se_n n5_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M5_ckn_p n5_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M5_ckn_n n5_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M5_cki_p n5_CKI n5_CKN VDD VDD PMOS W=0.60U L=0.05U
+M5_cki_n n5_CKI n5_CKN VSS VSS NMOS W=0.30U L=0.05U
+M5_tgD_n n5_n_mux n5_SEb D5 VSS NMOS W=0.20U L=0.05U
+M5_tgD_p n5_n_mux se_d D5 VDD PMOS W=0.40U L=0.05U
+M5_tgSI_n n5_n_mux se_d Q4 VSS NMOS W=0.20U L=0.05U
+M5_tgSI_p n5_n_mux n5_SEb Q4 VDD PMOS W=0.40U L=0.05U
+M5_tgM_n n5_n_m n5_CKN n5_n_mux VSS NMOS W=0.20U L=0.05U
+M5_tgM_p n5_n_m n5_CKI n5_n_mux VDD PMOS W=0.40U L=0.05U
+M5_minv_p n5_n_mb n5_n_m VDD VDD PMOS W=0.40U L=0.05U
+M5_minv_n n5_n_mb n5_n_m VSS VSS NMOS W=0.20U L=0.05U
+M5_mk_p1 n5_n_mk n5_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M5_mk_p2 n5_n_m n5_CKN n5_n_mk VDD PMOS W=0.24U L=0.05U
+M5_mk_n2 n5_n_m n5_CKI n5_n_mnk VSS NMOS W=0.12U L=0.05U
+M5_mk_n1 n5_n_mnk n5_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M5_tgS_n n5_n_s n5_CKI n5_n_mb VSS NMOS W=0.20U L=0.05U
+M5_tgS_p n5_n_s n5_CKN n5_n_mb VDD PMOS W=0.40U L=0.05U
+M5_q_p Q5 n5_n_s VDD VDD PMOS W=0.80U L=0.05U
+M5_q_n Q5 n5_n_s VSS VSS NMOS W=0.40U L=0.05U
+M5_sk_p1 n5_n_sk Q5 VDD VDD PMOS W=0.24U L=0.05U
+M5_sk_p2 n5_n_s n5_CKI n5_n_sk VDD PMOS W=0.24U L=0.05U
+M5_sk_n2 n5_n_s n5_CKN n5_n_snk VSS NMOS W=0.12U L=0.05U
+M5_sk_n1 n5_n_snk Q5 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 6  D=D6 SI=Q5 Q=Q6 ----
+M6_se_p n6_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M6_se_n n6_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M6_ckn_p n6_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M6_ckn_n n6_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M6_cki_p n6_CKI n6_CKN VDD VDD PMOS W=0.60U L=0.05U
+M6_cki_n n6_CKI n6_CKN VSS VSS NMOS W=0.30U L=0.05U
+M6_tgD_n n6_n_mux n6_SEb D6 VSS NMOS W=0.20U L=0.05U
+M6_tgD_p n6_n_mux se_d D6 VDD PMOS W=0.40U L=0.05U
+M6_tgSI_n n6_n_mux se_d Q5 VSS NMOS W=0.20U L=0.05U
+M6_tgSI_p n6_n_mux n6_SEb Q5 VDD PMOS W=0.40U L=0.05U
+M6_tgM_n n6_n_m n6_CKN n6_n_mux VSS NMOS W=0.20U L=0.05U
+M6_tgM_p n6_n_m n6_CKI n6_n_mux VDD PMOS W=0.40U L=0.05U
+M6_minv_p n6_n_mb n6_n_m VDD VDD PMOS W=0.40U L=0.05U
+M6_minv_n n6_n_mb n6_n_m VSS VSS NMOS W=0.20U L=0.05U
+M6_mk_p1 n6_n_mk n6_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M6_mk_p2 n6_n_m n6_CKN n6_n_mk VDD PMOS W=0.24U L=0.05U
+M6_mk_n2 n6_n_m n6_CKI n6_n_mnk VSS NMOS W=0.12U L=0.05U
+M6_mk_n1 n6_n_mnk n6_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M6_tgS_n n6_n_s n6_CKI n6_n_mb VSS NMOS W=0.20U L=0.05U
+M6_tgS_p n6_n_s n6_CKN n6_n_mb VDD PMOS W=0.40U L=0.05U
+M6_q_p Q6 n6_n_s VDD VDD PMOS W=0.80U L=0.05U
+M6_q_n Q6 n6_n_s VSS VSS NMOS W=0.40U L=0.05U
+M6_sk_p1 n6_n_sk Q6 VDD VDD PMOS W=0.24U L=0.05U
+M6_sk_p2 n6_n_s n6_CKI n6_n_sk VDD PMOS W=0.24U L=0.05U
+M6_sk_n2 n6_n_s n6_CKN n6_n_snk VSS NMOS W=0.12U L=0.05U
+M6_sk_n1 n6_n_snk Q6 VSS VSS NMOS W=0.12U L=0.05U
+
+*---- bit 7  D=D7 SI=Q6 Q=Q7 ----
+M7_se_p n7_SEb se_d VDD VDD PMOS W=0.40U L=0.05U
+M7_se_n n7_SEb se_d VSS VSS NMOS W=0.20U L=0.05U
+M7_ckn_p n7_CKN ck_d VDD VDD PMOS W=0.60U L=0.05U
+M7_ckn_n n7_CKN ck_d VSS VSS NMOS W=0.30U L=0.05U
+M7_cki_p n7_CKI n7_CKN VDD VDD PMOS W=0.60U L=0.05U
+M7_cki_n n7_CKI n7_CKN VSS VSS NMOS W=0.30U L=0.05U
+M7_tgD_n n7_n_mux n7_SEb D7 VSS NMOS W=0.20U L=0.05U
+M7_tgD_p n7_n_mux se_d D7 VDD PMOS W=0.40U L=0.05U
+M7_tgSI_n n7_n_mux se_d Q6 VSS NMOS W=0.20U L=0.05U
+M7_tgSI_p n7_n_mux n7_SEb Q6 VDD PMOS W=0.40U L=0.05U
+M7_tgM_n n7_n_m n7_CKN n7_n_mux VSS NMOS W=0.20U L=0.05U
+M7_tgM_p n7_n_m n7_CKI n7_n_mux VDD PMOS W=0.40U L=0.05U
+M7_minv_p n7_n_mb n7_n_m VDD VDD PMOS W=0.40U L=0.05U
+M7_minv_n n7_n_mb n7_n_m VSS VSS NMOS W=0.20U L=0.05U
+M7_mk_p1 n7_n_mk n7_n_mb VDD VDD PMOS W=0.24U L=0.05U
+M7_mk_p2 n7_n_m n7_CKN n7_n_mk VDD PMOS W=0.24U L=0.05U
+M7_mk_n2 n7_n_m n7_CKI n7_n_mnk VSS NMOS W=0.12U L=0.05U
+M7_mk_n1 n7_n_mnk n7_n_mb VSS VSS NMOS W=0.12U L=0.05U
+M7_tgS_n n7_n_s n7_CKI n7_n_mb VSS NMOS W=0.20U L=0.05U
+M7_tgS_p n7_n_s n7_CKN n7_n_mb VDD PMOS W=0.40U L=0.05U
+M7_q_p Q7 n7_n_s VDD VDD PMOS W=0.80U L=0.05U
+M7_q_n Q7 n7_n_s VSS VSS NMOS W=0.40U L=0.05U
+M7_sk_p1 n7_n_sk Q7 VDD VDD PMOS W=0.24U L=0.05U
+M7_sk_p2 n7_n_s n7_CKI n7_n_sk VDD PMOS W=0.24U L=0.05U
+M7_sk_n2 n7_n_s n7_CKN n7_n_snk VSS NMOS W=0.12U L=0.05U
+M7_sk_n1 n7_n_snk Q7 VSS VSS NMOS W=0.12U L=0.05U
+.ENDS SDFFQ_X1_8
