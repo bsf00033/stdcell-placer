@@ -67,7 +67,7 @@ def route_demand(rows, pairs, pininfo, tracks):
     W = len(rows[0]) if rows else 0
     uf = fabric_uf(rows, pairs)
     sites = defaultdict(list)
-    taps = [0] * W
+    tapset = [set() for _ in range(W)]
     for r, row in enumerate(rows):
         for c, sl in enumerate(row):
             if not sl:
@@ -76,7 +76,7 @@ def route_demand(rows, pairs, pininfo, tracks):
                 sites[sl[k]].append((r, c, k))
             for k in (1, 3):
                 if sl[k] in rails:
-                    taps[c] += 1
+                    tapset[c].add(sl[k])
     demand = [0] * W
     wl = 0
     for net, sts in sites.items():
@@ -96,7 +96,7 @@ def route_demand(rows, pairs, pininfo, tracks):
     ovf = 0
     cong = max(demand) if demand else 0
     for c in range(W):
-        supply = tracks - taps[c]
+        supply = tracks - len(tapset[c])
         ovf = max(ovf, max(0, demand[c] - supply))
     return ovf, cong, wl
 

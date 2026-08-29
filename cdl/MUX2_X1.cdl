@@ -1,0 +1,15 @@
+************************************************************************
+* Cell:    MUX2_X1
+* Function: 2:1 mux. TG A when S=0, TG B when S=1, then INV to Z.
+************************************************************************
+.SUBCKT MUX2_X1 A B S Z VDD VSS
+.PININFO A:I B:I S:I Z:O VDD:P VSS:G
+MpS Sb S VDD VDD PMOS W=0.40U L=0.05U
+MnS Sb S VSS VSS NMOS W=0.20U L=0.05U
+MnA I Sb A VSS NMOS W=0.20U L=0.05U
+MpA I S  A VDD PMOS W=0.40U L=0.05U
+MnB I S  B VSS NMOS W=0.20U L=0.05U
+MpB I Sb B VDD PMOS W=0.40U L=0.05U
+MpZ Z I VDD VDD PMOS W=0.40U L=0.05U
+MnZ Z I VSS VSS NMOS W=0.20U L=0.05U
+.ENDS MUX2_X1

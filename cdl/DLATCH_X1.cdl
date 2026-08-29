@@ -1,0 +1,18 @@
+************************************************************************
+* Cell:    DLATCH_X1
+* Function: transparent D-latch. Input TG on CLK, feedback TG on CLKb.
+*           Two inverters n1->Qb, Qb->Q. Do not freeze the latch inverters.
+************************************************************************
+.SUBCKT DLATCH_X1 D CLK Q VDD VSS
+.PININFO D:I CLK:I Q:O VDD:P VSS:G
+MpC CLKb CLK VDD VDD PMOS W=0.40U L=0.05U
+MnC CLKb CLK VSS VSS NMOS W=0.20U L=0.05U
+MnT1 n1 CLK  D VSS NMOS W=0.20U L=0.05U
+MpT1 n1 CLKb D VDD PMOS W=0.40U L=0.05U
+Mp1 Qb n1 VDD VDD PMOS W=0.40U L=0.05U
+Mn1 Qb n1 VSS VSS NMOS W=0.20U L=0.05U
+Mp2 Q Qb VDD VDD PMOS W=0.40U L=0.05U
+Mn2 Q Qb VSS VSS NMOS W=0.20U L=0.05U
+MnT2 n1 CLKb Q VSS NMOS W=0.20U L=0.05U
+MpT2 n1 CLK  Q VDD PMOS W=0.40U L=0.05U
+.ENDS DLATCH_X1

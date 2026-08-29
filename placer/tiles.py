@@ -203,8 +203,11 @@ def group(cell, types=None, brute=False):
         if brute:
             chains, singles = [], tdevs
         else:
-            skip = pins if n_rows.get(typ, 1) > 1 else ()
-            chains, singles = _chains(tdevs, rails(cell.pininfo), skip)
+            rl = rails(cell.pininfo)
+            skip = set(rl)
+            if n_rows.get(typ, 1) > 1:
+                skip |= pins
+            chains, singles = _chains(tdevs, rl, skip)
         for sl in chains:
             tiles.append(Tile(tid, typ, sl, None))
             tid += 1

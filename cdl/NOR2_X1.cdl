@@ -1,0 +1,11 @@
+************************************************************************
+* Cell:    NOR2_X1
+* Function: 2-input NOR
+************************************************************************
+.SUBCKT NOR2_X1 A B Z VDD VSS
+.PININFO A:I B:I Z:O VDD:P VSS:G
+MpA n1 A VDD VDD PMOS W=0.40U L=0.05U
+MpB Z  B n1  VDD PMOS W=0.40U L=0.05U
+MnA Z A VSS VSS NMOS W=0.20U L=0.05U
+MnB Z B VSS VSS NMOS W=0.20U L=0.05U
+.ENDS NOR2_X1

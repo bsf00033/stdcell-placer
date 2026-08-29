@@ -123,15 +123,19 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     if bruteForce:
         threshold = routability = 0.0
     all_tiles, frozen, end_nets, counts = tiles.group(cell, types, brute=bruteForce)
-    wmin = tiles.cell_width(len(cell.devices), rows)
     pack, wbest, dinfo = tiles.dummy_wmin(len(cell.devices), rows, types, counts)
+    brick_w = max((len(t.slots) for t in all_tiles), default=1)
+    wbest = max(wbest, brick_w)
+    wmin = max(pack, brick_w)
     print(tiles.fmt_dummy_wmin(pack, wbest, dinfo))
     all_tiles = tiles.cap_bricks(all_tiles, wmin)
     tg_names = score.tg_device_names(cell.devices)
     pairs = tiles.np_pairs(types)
     req = dumNumAdd
     cap = req + 5
-    skip = set(cell.pininfo) if len(pairs) > 1 else set()
+    skip = set(tiles.rails(cell.pininfo))
+    if len(pairs) > 1:
+        skip |= set(cell.pininfo)
     buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), wmin, skip)
     print(tiles.fmt_bricks(buckets))
     max_w = wmin + req if bruteForce else wmin + cap
@@ -142,6 +146,9 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         b = buckets[pi]
         tn = b['N'] + [f['N'] for f in b['F']]
         tp = b['P'] + [f['P'] for f in b['F']]
+        if not tn and not tp:
+            pair_lists.append([([], [], 'N')])
+            continue
         bcap = 50000 if bruteForce else None
         cands, t1, t2 = _pair_search(tn, tp, b['F'], first, max_w, threshold, routability, end_nets,
                                        score.rails_of(cell.pininfo), cap=bcap, packed=bruteForce)
@@ -167,7 +174,16 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             combined.append((grid, ft))
     else:
         # cartesian of pair results; stitch with flip+shift to max full-height align_g
-        tops = [lst[:16] for lst in pair_lists]
+        # --first both appends N then P; lst[:16] would drop the P half.
+        def _pair_tops(lst, k=16):
+            by = {}
+            for c in lst:
+                by.setdefault(c[2], []).append(c)
+            out = []
+            for ft in by:
+                out.extend(by[ft][:k])
+            return out or lst[:k]
+        tops = [_pair_tops(lst) for lst in pair_lists]
         import itertools
 
         def variants(n, p):
@@ -257,7 +273,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     n = len(pool)
     wm = min((m['W'] for m in pool), default=None)
     print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d' % (
-        rid, cell.name, wmin, wbest, used, n))
+        rid, cell.name, pack, wbest, used, n))
     if wm is not None:
         slack = wm - wbest
         if slack > 0:
@@ -330,6 +346,8 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
         types0 = tiles.row_types(runrow['rows'], runrow['pattern'])
         counts = tiles.diff_counts(cell.devices)
         pack, wbest, dinfo = tiles.dummy_wmin(len(cell.devices), runrow['rows'], types0, counts)
+        all_t, _, _, _ = tiles.group(cell, types0)
+        wbest = max(wbest, max((len(x.slots) for x in all_t), default=1))
         print(tiles.fmt_dummy_wmin(pack, wbest, dinfo))
         ach = min((m['W'] for m in pool), default=None)
         if ach is not None:
