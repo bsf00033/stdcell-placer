@@ -350,7 +350,7 @@ def _row_to_m(r, tracks=4):
 
 
 def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None,
-         dumNumAdd=None):
+         dumNumAdd=None, export=None):
     cx = DBmod.connect(db)
     runrow, pls = DBmod.get_run(cx, run_id=run, cell=cell)
     cx.close()
@@ -433,6 +433,14 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
                 i, sort, m['W'], m['ovf'], m.get('dummy', 0), m.get('rail', 0),
                 m['align_g'], m['align_sd'], m['cong'], m['wl']))
 
+    if export:
+        bydev = {}
+        if cdl_path and os.path.isfile(cdl_path):
+            bydev = {d.name: d for d in cdl.parse(cdl_path).devices}
+        lines = [ascii.order_line(m['grid']['cells'], bydev) for m in pool]
+        open(export, 'w').write('\n'.join(lines) + ('\n' if lines else ''))
+        print('export %d placements -> %s' % (len(lines), export))
+
 
 def main():
     p = argparse.ArgumentParser()
@@ -460,13 +468,14 @@ def main():
     s.add_argument('--run', type=int)
     s.add_argument('--dumNumAdd', type=int, default=None)
     s.add_argument('--db', default='place.db')
+    s.add_argument('--export', help='write order.txt lines for the run (one placement per line)')
     a = p.parse_args()
     if a.cmd == 'gen':
         place(a.cdl, a.rows, a.pattern, a.tracks, a.threshold, a.routability,
               a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce, halfDummy=a.halfDummy,
               hard=a.hard)
     else:
-        show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd)
+        show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd, export=a.export)
 
 
 if __name__ == '__main__':
