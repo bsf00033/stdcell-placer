@@ -105,6 +105,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         threshold = routability = 0.0
     all_tiles, frozen, end_nets, counts = tiles.group(cell, types, brute=bruteForce)
     wmin = tiles.cell_width(len(cell.devices), rows)
+    pack, wbest, dinfo = tiles.dummy_wmin(len(cell.devices), rows, types, counts)
+    print(tiles.fmt_dummy_wmin(pack, wbest, dinfo))
     all_tiles = tiles.cap_bricks(all_tiles, wmin)
     tg_names = score.tg_device_names(cell.devices)
     pairs = tiles.np_pairs(types)
@@ -229,7 +231,14 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     cx.close()
     n = len(pool)
     wm = min((m['W'] for m in pool), default=None)
-    print('run %d cell=%s Wmin=%s dumNumAdd_used=%d n=%d' % (rid, cell.name, wmin, used, n))
+    print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d' % (
+        rid, cell.name, wmin, wbest, used, n))
+    if wm is not None:
+        slack = wm - wbest
+        if slack > 0:
+            print('achieved W=%d  slack=%d vs best' % (wm, slack))
+        else:
+            print('achieved W=%d = best' % wm)
     print('phase1 %s  phase2 %s  total %s  n=%d' % (fmt_t(t1s), fmt_t(t2s), fmt_t(t_total), n))
     return rid
 
@@ -290,6 +299,20 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
     print('run %d %s rows=%d pattern=%s tracks=%d first=%s dumNumAdd %d->%d' % (
         runrow['id'], runrow['cell'], runrow['rows'], runrow['pattern'],
         runrow['tracks'], runrow['first'], runrow['dumNumAdd_requested'], runrow['dumNumAdd_used']))
+    cdl_path = runrow['cdl']
+    if cdl_path and os.path.isfile(cdl_path):
+        cell = cdl.parse(cdl_path)
+        types0 = tiles.row_types(runrow['rows'], runrow['pattern'])
+        counts = tiles.diff_counts(cell.devices)
+        pack, wbest, dinfo = tiles.dummy_wmin(len(cell.devices), runrow['rows'], types0, counts)
+        print(tiles.fmt_dummy_wmin(pack, wbest, dinfo))
+        ach = min((m['W'] for m in pool), default=None)
+        if ach is not None:
+            slack = ach - wbest
+            if slack > 0:
+                print('achieved W=%d  slack=%d vs best' % (ach, slack))
+            else:
+                print('achieved W=%d = best' % ach)
     print('phase1 %s  phase2 %s  total %s' % (
         fmt_t(runrow['t_phase1'] or 0), fmt_t(runrow['t_phase2'] or 0), fmt_t(runrow['t_total'] or 0)))
     hdr = '%4s %3s %3s %5s %4s %4s %4s %7s %8s %8s %6s' % (

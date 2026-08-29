@@ -243,6 +243,38 @@ def cell_width(n_tran, rows):
     return max(1, (n_tran + ndiff - 1) // ndiff)
 
 
+def dummy_wmin(n_tran, rows, types, counts):
+    """Best-case W: pack plus interior dummy pitches.
+    Each odd S/D net needs one dummy. 2 per row (L/R) are free.
+    Remaining pair into interior breaks (2 odds per extra poly pitch).
+    Extra is max(N, P). Lower bound; chains can force more."""
+    pack = cell_width(n_tran, rows)
+    n_rows = {'N': 0, 'P': 0}
+    for t in types:
+        n_rows[t] += 1
+    info = {}
+    extra = 0
+    for typ in 'NP':
+        odd = sum(1 for c in counts[typ].values() if c % 2 == 1)
+        bound = 2 * n_rows[typ]
+        remain = max(0, odd - bound)
+        interior = (remain + 1) // 2
+        info[typ] = dict(odd=odd, bound=bound, remain=remain, interior=interior, rows=n_rows[typ])
+        extra = max(extra, interior)
+    return pack, pack + extra, info
+
+
+def fmt_dummy_wmin(pack, best, info):
+    return ('Wmin pack=%d best=%d  odd N=%d P=%d  bound N=%d P=%d  remain N=%d P=%d  extra=%d' % (
+        pack, best, info['N']['odd'], info['P']['odd'],
+        info['N']['bound'], info['P']['bound'],
+        info['N']['remain'], info['P']['remain'], extra_of(info)))
+
+
+def extra_of(info):
+    return max(info['N']['interior'], info['P']['interior'])
+
+
 def cap_bricks(tile_list, width):
     """Brick cannot be bigger than width. Split leftover chains; frozen 4T stays."""
     out = []
