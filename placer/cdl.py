@@ -1,4 +1,3 @@
-from collections import Counter
 from dataclasses import dataclass
 
 
@@ -66,16 +65,30 @@ def _mos_type(model):
 
 
 def infer_pininfo(pins, devices, pininfo):
-    """Fill missing rail roles from MOS bulk. Other ports default to I."""
+    """Rails from S/D (not bulk). N-only S/D pin is VSS, P-only is VDD. Bulk ignored."""
     out = dict(pininfo)
-    n_bulk = [d.bulk for d in devices if d.typ == 'N' and d.bulk]
-    p_bulk = [d.bulk for d in devices if d.typ == 'P' and d.bulk]
-    if n_bulk and 'G' not in out.values():
-        g, _ = Counter(n_bulk).most_common(1)[0]
-        out.setdefault(g, 'G')
-    if p_bulk and 'P' not in out.values():
-        p, _ = Counter(p_bulk).most_common(1)[0]
-        out.setdefault(p, 'P')
+    n_sd, p_sd = set(), set()
+    for d in devices:
+        sd = {d.source, d.drain}
+        if d.typ == 'N':
+            n_sd |= sd
+        else:
+            p_sd |= sd
+    pinset = set(pins)
+
+    def pick(cands, role):
+        if role in out.values():
+            return
+        cands = [n for n in cands if n]
+        if pinset:
+            cands = [n for n in cands if n in pinset] or cands
+        if not cands:
+            return
+        g = next((p for p in pins if p in cands), cands[0])
+        out.setdefault(g, role)
+
+    pick(n_sd - p_sd, 'G')
+    pick(p_sd - n_sd, 'P')
     for pin in pins:
         out.setdefault(pin, 'I')
     return out
@@ -89,19 +102,20 @@ def parse(path):
             if name:
                 break
             parts = line.replace('(', ' ').replace(')', ' ').split()
-            name, pins = parts[1], parts[2:]
+            name, pins = parts[1], [x.upper() for x in parts[2:]]
         elif u.startswith('.PININFO'):
             for tok in line.split()[1:]:
                 if ':' in tok:
                     p, r = tok.split(':', 1)
-                    pininfo[p] = r.upper()
+                    pininfo[p.upper()] = r.upper()
         elif u.startswith('.ENDS'):
             break
         elif u[0] == 'M':
             parts = line.replace('(', ' ').replace(')', ' ').split()
             if len(parts) < 6:
                 raise ValueError('bad MOS line ' + line)
-            d, g, s, b, model = parts[1:6]
+            d, g, s, b = [x.upper() for x in parts[1:5]]
+            model = parts[5]
             kv = {}
             for t in parts[6:]:
                 if '=' in t:
