@@ -1,0 +1,72 @@
+************************************************************************
+* Cell:    CMPE42_X1
+* Function: 4:2 compressor (two 28T CMOS mirror full adders)
+*           A+B+C+D+CI = 2*CO + 2*C1 + S
+*           CO = majority(A,B,C)  independent of CI
+*           FA1: A,B,C -> n_s1, CO
+*           FA2: n_s1,D,CI -> S, C1
+*           56 MOS, static CMOS (no pass-gate XOR).
+************************************************************************
+.SUBCKT CMPE42_X1 A B C D CI S CO C1 VDD VSS
+.PININFO A:I B:I C:I D:I CI:I S:O CO:O C1:O VDD:P VSS:G
+
+*---- FA1: A, B, C -> n_s1, CO ----
+M1pc_ab1 M1c_pab B VDD VDD PMOS W=0.40U L=0.05U
+M1pc_ab2 M1co_n A M1c_pab VDD PMOS W=0.40U L=0.05U
+M1pc_or1 M1c_ppar A VDD VDD PMOS W=0.40U L=0.05U
+M1pc_or2 M1c_ppar B VDD VDD PMOS W=0.40U L=0.05U
+M1pc_cin M1co_n C M1c_ppar VDD PMOS W=0.40U L=0.05U
+M1pco CO M1co_n VDD VDD PMOS W=0.40U L=0.05U
+M1nc_ab2 M1c_nab B VSS VSS NMOS W=0.20U L=0.05U
+M1nc_ab1 M1co_n A M1c_nab VSS NMOS W=0.20U L=0.05U
+M1nc_or1 M1c_npar A VSS VSS NMOS W=0.20U L=0.05U
+M1nc_or2 M1c_npar B VSS VSS NMOS W=0.20U L=0.05U
+M1nc_cin M1co_n C M1c_npar VSS NMOS W=0.20U L=0.05U
+M1nco CO M1co_n VSS VSS NMOS W=0.20U L=0.05U
+M1ps_c M1s_pc C VDD VDD PMOS W=0.40U L=0.05U
+M1ps_b M1s_pab B M1s_pc VDD PMOS W=0.40U L=0.05U
+M1ps_a M1s_n A M1s_pab VDD PMOS W=0.40U L=0.05U
+M1ps_orA M1s_ppar A VDD VDD PMOS W=0.40U L=0.05U
+M1ps_orB M1s_ppar B VDD VDD PMOS W=0.40U L=0.05U
+M1ps_orC M1s_ppar C VDD VDD PMOS W=0.40U L=0.05U
+M1ps_co M1s_n M1co_n M1s_ppar VDD PMOS W=0.40U L=0.05U
+M1ps n_s1 M1s_n VDD VDD PMOS W=0.40U L=0.05U
+M1ns_a M1s_n A M1s_nab VSS NMOS W=0.20U L=0.05U
+M1ns_b M1s_nab B M1s_nc VSS NMOS W=0.20U L=0.05U
+M1ns_c M1s_nc C VSS VSS NMOS W=0.20U L=0.05U
+M1ns_co M1s_n M1co_n M1s_npar VSS NMOS W=0.20U L=0.05U
+M1ns_orA M1s_npar A VSS VSS NMOS W=0.20U L=0.05U
+M1ns_orB M1s_npar B VSS VSS NMOS W=0.20U L=0.05U
+M1ns_orC M1s_npar C VSS VSS NMOS W=0.20U L=0.05U
+M1ns n_s1 M1s_n VSS VSS NMOS W=0.20U L=0.05U
+
+*---- FA2: n_s1, D, CI -> S, C1 ----
+M2pc_ab1 M2c_pab D VDD VDD PMOS W=0.40U L=0.05U
+M2pc_ab2 M2co_n n_s1 M2c_pab VDD PMOS W=0.40U L=0.05U
+M2pc_or1 M2c_ppar n_s1 VDD VDD PMOS W=0.40U L=0.05U
+M2pc_or2 M2c_ppar D VDD VDD PMOS W=0.40U L=0.05U
+M2pc_cin M2co_n CI M2c_ppar VDD PMOS W=0.40U L=0.05U
+M2pco C1 M2co_n VDD VDD PMOS W=0.40U L=0.05U
+M2nc_ab2 M2c_nab D VSS VSS NMOS W=0.20U L=0.05U
+M2nc_ab1 M2co_n n_s1 M2c_nab VSS NMOS W=0.20U L=0.05U
+M2nc_or1 M2c_npar n_s1 VSS VSS NMOS W=0.20U L=0.05U
+M2nc_or2 M2c_npar D VSS VSS NMOS W=0.20U L=0.05U
+M2nc_cin M2co_n CI M2c_npar VSS NMOS W=0.20U L=0.05U
+M2nco C1 M2co_n VSS VSS NMOS W=0.20U L=0.05U
+M2ps_c M2s_pc CI VDD VDD PMOS W=0.40U L=0.05U
+M2ps_b M2s_pab D M2s_pc VDD PMOS W=0.40U L=0.05U
+M2ps_a M2s_n n_s1 M2s_pab VDD PMOS W=0.40U L=0.05U
+M2ps_orA M2s_ppar n_s1 VDD VDD PMOS W=0.40U L=0.05U
+M2ps_orB M2s_ppar D VDD VDD PMOS W=0.40U L=0.05U
+M2ps_orC M2s_ppar CI VDD VDD PMOS W=0.40U L=0.05U
+M2ps_co M2s_n M2co_n M2s_ppar VDD PMOS W=0.40U L=0.05U
+M2ps S M2s_n VDD VDD PMOS W=0.40U L=0.05U
+M2ns_a M2s_n n_s1 M2s_nab VSS NMOS W=0.20U L=0.05U
+M2ns_b M2s_nab D M2s_nc VSS NMOS W=0.20U L=0.05U
+M2ns_c M2s_nc CI VSS VSS NMOS W=0.20U L=0.05U
+M2ns_co M2s_n M2co_n M2s_npar VSS NMOS W=0.20U L=0.05U
+M2ns_orA M2s_npar n_s1 VSS VSS NMOS W=0.20U L=0.05U
+M2ns_orB M2s_npar D VSS VSS NMOS W=0.20U L=0.05U
+M2ns_orC M2s_npar CI VSS VSS NMOS W=0.20U L=0.05U
+M2ns S M2s_n VSS VSS NMOS W=0.20U L=0.05U
+.ENDS CMPE42_X1
