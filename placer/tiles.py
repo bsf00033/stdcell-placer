@@ -275,6 +275,31 @@ def extra_of(info):
     return max(info['N']['interior'], info['P']['interior'])
 
 
+
+def fmt_tile(t):
+    names = ' '.join(sl[0] for sl in t.slots)
+    if not t.slots:
+        return '[' + names + ']'
+    parts = [t.slots[0][1]]
+    for sl in t.slots:
+        parts.append(sl[2])
+        parts.append(sl[3])
+    tag = ' 4T' if t.frozen_id is not None else ''
+    return '[%s]%s  %s' % (names, tag, '-'.join(parts))
+
+
+def fmt_bricks(buckets):
+    lines = []
+    for i, b in enumerate(buckets):
+        lines.append('bricks pair %d' % i)
+        for typ in 'NP':
+            ts = list(b[typ]) + [f[typ] for f in b['F']]
+            lines.append('  %s  %d' % (typ, len(ts)))
+            for t in ts:
+                lines.append('    ' + fmt_tile(t))
+    return '\n'.join(lines)
+
+
 def cap_bricks(tile_list, width):
     """Brick cannot be bigger than width. Split leftover chains; frozen 4T stays."""
     out = []

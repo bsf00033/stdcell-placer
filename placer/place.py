@@ -114,6 +114,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     cap = req + 5
     skip = set(cell.pininfo) if len(pairs) > 1 else set()
     buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), wmin, skip)
+    print(tiles.fmt_bricks(buckets))
     max_w = wmin + req if bruteForce else wmin + cap
 
     t1s = t2s = 0.0
