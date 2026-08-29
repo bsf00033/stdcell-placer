@@ -322,12 +322,14 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
             if not ranked:
                 continue
             m = ranked[0]
-            do_dump(m, '#1 %s  W=%d ovf=%d rail=%d cong=%d wl=%d' % (
-                k, m['W'], m['ovf'], m.get('rail', 0), m['cong'], m['wl']))
+            do_dump(m, '#1 %s  W=%d ovf=%d dummy=%d rail=%d align_g=%d align_sd=%d cong=%d wl=%d' % (
+                k, m['W'], m['ovf'], m.get('dummy', 0), m.get('rail', 0),
+                m['align_g'], m['align_sd'], m['cong'], m['wl']))
     else:
         for i, m in enumerate(pool[:nshow], 1):
-            do_dump(m, '#%d %s  W=%d ovf=%d rail=%d cong=%d wl=%d' % (
-                i, sort, m['W'], m['ovf'], m.get('rail', 0), m['cong'], m['wl']))
+            do_dump(m, '#%d %s  W=%d ovf=%d dummy=%d rail=%d align_g=%d align_sd=%d cong=%d wl=%d' % (
+                i, sort, m['W'], m['ovf'], m.get('dummy', 0), m.get('rail', 0),
+                m['align_g'], m['align_sd'], m['cong'], m['wl']))
 
 
 def main():
