@@ -368,9 +368,15 @@ def _tile_comps(tile_list, skip_nets=()):
     return comps, isolates
 
 
+def _gates_of(t):
+    return [sl[2] for sl in t.slots]
+
+
 def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=(), typ_order='NP', reverse=False):
     """Keep a forced-abut component on one pair. Isolated tiles round-robin.
-    Brute singles of a series stack stay together; parallel P stripe by CDL order."""
+    Same gate in one row cannot stack, so prefer a pair that does not already
+    have that gate on this type; the other type prefers a pair that does
+    (CMOS column)."""
     buckets = [{'N': [], 'P': [], 'F': []} for _ in range(n_pairs)]
     for i, f in enumerate(frozen):
         buckets[i % n_pairs]['F'].append(f)
@@ -380,12 +386,32 @@ def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=(), typ_order='NP
         b = buckets[k]
         return sum(len(x.slots) for x in b[typ]) + 2 * len(b['F'])
 
+    def pair_gates(k, typ):
+        gs = []
+        for x in buckets[k][typ]:
+            gs.extend(_gates_of(x))
+        for f in buckets[k]['F']:
+            gs.extend(_gates_of(f[typ]))
+        return gs
+
+    def pick(room, t, typ):
+        cand = list(room) if room else list(range(n_pairs))
+        gset = set(_gates_of(t))
+        other = 'P' if typ == 'N' else 'N'
+
+        def key(k):
+            have = set(pair_gates(k, typ))
+            oth = set(pair_gates(k, other))
+            dup = sum(1 for g in gset if g in have)
+            cmos = sum(1 for g in gset if g in oth)
+            return (dup, -cmos, load_of(k, typ))
+        return min(cand, key=key)
+
     def place_one(t, typ):
         ln = len(t.slots)
         room = [k for k in range(n_pairs)
                 if width is None or load_of(k, typ) + ln <= width]
-        j = min(room if room else range(n_pairs), key=lambda k: load_of(k, typ))
-        buckets[j][typ].append(t)
+        buckets[pick(room, t, typ)][typ].append(t)
 
     for typ in typ_order:
         rem = [t for t in tiles if t.typ == typ and t.frozen_id is None]
@@ -400,7 +426,7 @@ def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=(), typ_order='NP
             room = [k for k in range(n_pairs)
                     if width is None or load_of(k, typ) + size <= width]
             if room:
-                j = min(room, key=lambda k: load_of(k, typ))
+                j = pick(room, comp[0], typ)
                 for t in comp:
                     buckets[j][typ].append(t)
             else:

@@ -125,6 +125,19 @@ def route_demand(rows, pairs, pininfo, tracks):
     return ovf, cong, wl
 
 
+def dup_gates(rows):
+    """Extra same-gate hits in one row. Those cannot stack vertically."""
+    d = 0
+    for row in rows:
+        cnt = {}
+        for sl in row:
+            if sl:
+                g = sl[2]
+                cnt[g] = cnt.get(g, 0) + 1
+        d += sum(c - 1 for c in cnt.values() if c > 1)
+    return d
+
+
 def alignments(rows, pairs, tg_names):
     W = len(rows[0]) if rows else 0
     ag = asd = apg = 0
@@ -272,6 +285,7 @@ def metrics(rows, types, pininfo, tracks, end_nets, tg_names):
     W = len(rows[0]) if rows else 0
     ovf, cong, wl = route_demand(rows, pairs, pininfo, tracks)
     ag, asd, apg = alignments(rows, pairs, tg_names)
+    dup_g = dup_gates(rows)
     dummy = dummy_bonus(rows, end_nets, types)
     rail = rail_bonus(rows, types, pininfo)
     clk = clk_bonus(rows, pairs)
@@ -279,7 +293,7 @@ def metrics(rows, types, pininfo, tracks, end_nets, tg_names):
     route = ovf * 10000 + cong * 100 + wl
     return {
         'W': W, 'ovf': ovf, 'cong': cong, 'wl': wl,
-        'align_g': ag, 'align_sd': asd, 'align_pg': apg,
+        'align_g': ag, 'align_sd': asd, 'align_pg': apg, 'dup_g': dup_g,
         'route': route, 'dummy': dummy, 'end': dummy, 'rail': rail, 'clk': clk, 'pin': pin,
     }
 
@@ -289,7 +303,7 @@ def cost_tuple(m, prefer_wide=False):
     # dumNumAdd>0: extra pitches were requested, so ovf first then largest W
     # (wider is easier to route). dummy/rail/align still break ties.
     rest = (-m.get('dummy', 0), -m.get('rail', 0), m['cong'], m['wl'],
-            -m['align_g'], -m['align_sd'], -m['align_pg'],
+            m.get('dup_g', 0), -m['align_g'], -m['align_sd'], -m['align_pg'],
             -m.get('clk', 0), -m.get('pin', 0))
     if prefer_wide:
         return (m['ovf'], -m['W']) + rest
