@@ -189,7 +189,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     for grid, ft in combined:
         m = score.metrics(grid, types, cell.pininfo, tracks, end_nets, tg_names)
         m['first_type'] = ft
-        m['grid'] = {'types': types, 'cells': grid, 'pininfo': cell.pininfo}
+        m['grid'] = {'types': types, 'cells': grid, 'pininfo': cell.pininfo,
+                    'odd_nets': {k: list(v) for k, v in end_nets.items()}}
         m['_cost'] = score.cost_tuple(m)
         scored.append(m)
     scored.sort(key=lambda m: m['_cost'])
@@ -242,6 +243,7 @@ SORT_KEYS = {
     'align': lambda m: (-(m['align_g'] + m['align_sd'] + m['align_pg']), m['_cost']),
     'align_g': lambda m: (-m['align_g'], m['_cost']),
     'rail': lambda m: (-m.get('rail', 0), m['_cost']),
+    'dummy': lambda m: (-m.get('dummy', 0), m['_cost']),
 }
 
 
@@ -251,8 +253,9 @@ def _row_to_m(r, tracks=4):
     m['grid'] = grid
     pininfo = grid.get('pininfo') or {}
     types = grid.get('types') or []
+    odd = {k: set(v) for k, v in (grid.get('odd_nets') or {}).items()}
     if pininfo and types:
-        mm = score.metrics(grid['cells'], types, pininfo, tracks, {'N': set(), 'P': set()}, set())
+        mm = score.metrics(grid['cells'], types, pininfo, tracks, odd, set())
         m.update(mm)
         m['grid'] = grid
         m['first_type'] = r['first_type']
@@ -289,12 +292,12 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
         runrow['tracks'], runrow['first'], runrow['dumNumAdd_requested'], runrow['dumNumAdd_used']))
     print('phase1 %s  phase2 %s  total %s' % (
         fmt_t(runrow['t_phase1'] or 0), fmt_t(runrow['t_phase2'] or 0), fmt_t(runrow['t_total'] or 0)))
-    hdr = '%4s %3s %3s %4s %4s %4s %7s %8s %8s %6s' % (
-        '#', 'W', 'ovf', 'rail', 'cong', 'wl', 'align_g', 'align_sd', 'align_pg', 'route')
+    hdr = '%4s %3s %3s %5s %4s %4s %4s %7s %8s %8s %6s' % (
+        '#', 'W', 'ovf', 'dummy', 'rail', 'cong', 'wl', 'align_g', 'align_sd', 'align_pg', 'route')
     print(hdr)
     for i, m in enumerate(pool, 1):
-        print('%4d %3d %3d %4d %4d %4d %7d %8d %8d %6d' % (
-            i, m['W'], m['ovf'], m.get('rail', 0), m['cong'], m['wl'],
+        print('%4d %3d %3d %5d %4d %4d %4d %7d %8d %8d %6d' % (
+            i, m['W'], m['ovf'], m.get('dummy', 0), m.get('rail', 0), m['cong'], m['wl'],
             m['align_g'], m['align_sd'], m['align_pg'], m['route']))
     types = pool[0]['grid']['types'] if pool else []
 

@@ -212,7 +212,8 @@ def group(cell, types=None, brute=False):
             tiles.append(Tile(tid, typ, ((d.name, d.source, d.gate, d.drain),), None))
             tid += 1
     counts = diff_counts(cell.devices)
-    end_nets = {t: {n for n, c in counts[t].items() if c == 1} for t in 'NP'}
+    # dummy sites: any S/D net with odd count (pins, rails, internals)
+    end_nets = {t: {n for n, c in counts[t].items() if c % 2 == 1} for t in 'NP'}
     return tiles, frozen, end_nets, counts
 
 

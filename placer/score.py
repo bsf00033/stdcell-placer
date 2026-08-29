@@ -162,18 +162,21 @@ def rails_of(pininfo):
     return r
 
 
-def end_bonus(rows, end_nets, types):
+def dummy_bonus(rows, odd_nets, types):
+    """Odd S/D count facing out (dummy at boundary). +2 left, +1 right. Beats rail."""
     left, right = _end_nets_of(rows)
     b = 0
     for i, n in enumerate(left):
-        t = types[i]
-        if n in end_nets.get(t, ()):
-            b += 1
+        if n in odd_nets.get(types[i], ()):
+            b += 2
     for i, n in enumerate(right):
-        t = types[i]
-        if n in end_nets.get(t, ()):
+        if n in odd_nets.get(types[i], ()):
             b += 1
     return b
+
+
+def end_bonus(rows, end_nets, types):
+    return dummy_bonus(rows, end_nets, types)
 
 
 def rail_bonus(rows, types, pininfo):
@@ -245,7 +248,7 @@ def metrics(rows, types, pininfo, tracks, end_nets, tg_names):
     W = len(rows[0]) if rows else 0
     ovf, cong, wl = route_demand(rows, pairs, pininfo, tracks)
     ag, asd, apg = alignments(rows, pairs, tg_names)
-    end = end_bonus(rows, end_nets, types)
+    dummy = dummy_bonus(rows, end_nets, types)
     rail = rail_bonus(rows, types, pininfo)
     clk = clk_bonus(rows, pairs)
     pin = pin_bonus(rows)
@@ -253,15 +256,16 @@ def metrics(rows, types, pininfo, tracks, end_nets, tg_names):
     return {
         'W': W, 'ovf': ovf, 'cong': cong, 'wl': wl,
         'align_g': ag, 'align_sd': asd, 'align_pg': apg,
-        'route': route, 'end': end, 'rail': rail, 'clk': clk, 'pin': pin,
+        'route': route, 'dummy': dummy, 'end': dummy, 'rail': rail, 'clk': clk, 'pin': pin,
     }
 
 
 def cost_tuple(m):
     # W, ovf, then rail-outside (first device). Never buy rail with extra col.
-    return (m['W'], m['ovf'], -m.get('rail', 0), m['cong'], m['wl'],
+    # dummy (odd S/D at boundary) before rail: saves a dummy column
+    return (m['W'], m['ovf'], -m.get('dummy', 0), -m.get('rail', 0), m['cong'], m['wl'],
             -m['align_g'], -m['align_sd'], -m['align_pg'],
-            -m.get('end', 0), -m.get('clk', 0), -m.get('pin', 0))
+            -m.get('clk', 0), -m.get('pin', 0))
 
 
 def prune(paths, key, threshold, cap=256):

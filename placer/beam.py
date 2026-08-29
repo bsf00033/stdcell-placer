@@ -47,10 +47,11 @@ def phase1(tiles, end_nets, max_w, threshold, rails=None, cap=None):
                     nrem = rem - {tid}
                     bonus = 0
                     if not cols:
-                        if sl[0][1] == rail:
+                        left = sl[0][1]
+                        if left in ends:
+                            bonus += 4
+                        elif left == rail:
                             bonus += 2
-                        if sl[0][1] in ends:
-                            bonus += 1
                     nxt.append((new, nrem, bonus, gap))
         # prune only among same-length paths (one more tile each); rank width first
         ranked = [((len(c), -b, -sum(1 for x in c if x)), (tuple(c), r)) for c, r, b, g in nxt]
@@ -66,13 +67,13 @@ def phase1(tiles, end_nets, max_w, threshold, rails=None, cap=None):
         if cols:
             left = next((s[1] for s in cols if s), None)
             right = _end_net(cols)
-            if left == rail:
+            if left in ends:
+                bonus += 4
+            elif left == rail:
                 bonus += 2
-            elif left in ends:
-                bonus += 1
-            if right == rail:
-                bonus += 1
-            elif right in ends:
+            if right in ends:
+                bonus += 2
+            elif right == rail:
                 bonus += 1
         out.append((len(cols), -bonus, cols))
     out.sort(key=lambda x: (x[0], x[1]))
