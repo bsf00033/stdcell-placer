@@ -114,9 +114,73 @@ def _align_g(grid):
     return ag
 
 
+def _combine_pairs(pair_lists, pairs, types, tops_k=16):
+    combined = []
+    if not pair_lists or not all(pair_lists):
+        return combined
+    if len(pairs) == 1:
+        for n, p, ft in pair_lists[0]:
+            grid = [None] * len(types)
+            nr, pr = pairs[0]
+            W = max(len(n), len(p))
+            grid[nr] = _pad(n, W)
+            grid[pr] = _pad(p, W)
+            for i, t in enumerate(types):
+                if grid[i] is None:
+                    grid[i] = [None] * W
+            combined.append((grid, ft))
+        return combined
+    def _pair_tops(lst, k=tops_k):
+        by = {}
+        for c in lst:
+            by.setdefault(c[2], []).append(c)
+        out = []
+        for ft in by:
+            out.extend(by[ft][:k])
+        return out or lst[:k]
+    tops = [_pair_tops(lst) for lst in pair_lists]
+    import itertools
+
+    def variants(n, p):
+        yield n, p
+        yield _flip_row(n), _flip_row(p)
+
+    for combo in itertools.product(*tops):
+        best_ag, best_ft, best_grids = -1, combo[0][2], []
+        v1 = list(variants(combo[0][0], combo[0][1]))
+        rest = [list(variants(c[0], c[1])) for c in combo[1:]]
+        for n0, p0 in v1:
+            for prod in itertools.product(*rest) if rest else [()]:
+                parts = [(n0, p0)] + list(prod)
+                W = max(max(len(n), len(p)) for n, p in parts)
+                def rec(i, placed):
+                    nonlocal best_ag, best_grids
+                    if i == len(parts):
+                        grid = [[None] * W for _ in types]
+                        for k, (nr, pr) in enumerate(pairs):
+                            n, p, s = placed[k]
+                            wn = max(len(n), len(p))
+                            grid[nr] = _pad(_shift(_pad(n, wn), s), W)
+                            grid[pr] = _pad(_shift(_pad(p, wn), s), W)
+                        ag = _align_g(grid)
+                        if ag > best_ag:
+                            best_ag, best_grids = ag, [grid]
+                        elif ag == best_ag:
+                            best_grids.append(grid)
+                        return
+                    n, p = parts[i]
+                    wi = max(len(n), len(p))
+                    for s in range(0, W - wi + 1):
+                        rec(i + 1, placed + [(n, p, s)])
+                rec(1, [(n0, p0, 0)])
+        for g in best_grids:
+            combined.append((g, best_ft))
+    return combined
+
+
 def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
           routability=0.0, first='auto', dumNumAdd=0, db='place.db', bruteForce=False,
-          halfDummy=False):
+          halfDummy=False, hard=False):
     if pattern not in ('NPPN', 'PNNP'):
         raise SystemExit('pattern must be NPPN or PNNP')
     cell = cdl.parse(cdl_path)
@@ -137,93 +201,47 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     skip = set(tiles.rails(cell.pininfo))
     if len(pairs) > 1:
         skip |= set(cell.pininfo)
-    buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), wmin, skip)
-    print(tiles.fmt_bricks(buckets))
+    if hard and first == 'auto':
+        first = 'both'
+    packings = [(False, 'NP')]
+    if hard and len(pairs) > 1:
+        packings = [(False, 'NP'), (True, 'NP'), (False, 'PN'), (True, 'PN')]
     max_w = wmin + req if bruteForce else wmin + cap
-
+    bcap = 50000 if bruteForce else (1024 if hard else None)
+    tops_k = 32 if hard else 16
     t1s = t2s = 0.0
-    pair_lists = []
-    for pi, (nr, pr) in enumerate(pairs):
-        b = buckets[pi]
-        tn = b['N'] + [f['N'] for f in b['F']]
-        tp = b['P'] + [f['P'] for f in b['F']]
-        if not tn and not tp:
-            pair_lists.append([([], [], 'N')])
-            continue
-        bcap = 50000 if bruteForce else None
-        cands, t1, t2 = _pair_search(tn, tp, b['F'], first, max_w, threshold, routability, end_nets,
-                                       score.rails_of(cell.pininfo), cap=bcap, packed=bruteForce,
-                                       half_dummy=halfDummy)
-        t1s += t1
-        t2s += t2
-        pair_lists.append(cands)
-    t_total = t1s + t2s
-
-    # combine pair results (cartesian of a few best, or single pair)
     combined = []
-    if not pair_lists or not all(pair_lists):
-        combined = []
-    elif len(pairs) == 1:
-        for n, p, ft in pair_lists[0]:
-            grid = [None] * len(types)
-            nr, pr = pairs[0]
-            W = max(len(n), len(p))
-            grid[nr] = _pad(n, W)
-            grid[pr] = _pad(p, W)
-            for i, t in enumerate(types):
-                if grid[i] is None:
-                    grid[i] = [None] * W
-            combined.append((grid, ft))
-    else:
-        # cartesian of pair results; stitch with flip+shift to max full-height align_g
-        # --first both appends N then P; lst[:16] would drop the P half.
-        def _pair_tops(lst, k=16):
-            by = {}
-            for c in lst:
-                by.setdefault(c[2], []).append(c)
-            out = []
-            for ft in by:
-                out.extend(by[ft][:k])
-            return out or lst[:k]
-        tops = [_pair_tops(lst) for lst in pair_lists]
-        import itertools
-
-        def variants(n, p):
-            yield n, p
-            yield _flip_row(n), _flip_row(p)
-
-        for combo in itertools.product(*tops):
-            widths = [max(len(c[0]), len(c[1])) for c in combo]
-            W0 = max(widths)
-            best_ag, best_ft, best_grids = -1, combo[0][2], []
-            v1 = list(variants(combo[0][0], combo[0][1]))
-            rest = [list(variants(c[0], c[1])) for c in combo[1:]]
-            for n0, p0 in v1:
-                for prod in itertools.product(*rest) if rest else [()]:
-                    parts = [(n0, p0)] + list(prod)
-                    W = max(max(len(n), len(p)) for n, p in parts)
-                    def rec(i, placed):
-                        nonlocal best_ag, best_grids
-                        if i == len(parts):
-                            grid = [[None] * W for _ in types]
-                            for k, (nr, pr) in enumerate(pairs):
-                                n, p, s = placed[k]
-                                wn = max(len(n), len(p))
-                                grid[nr] = _pad(_shift(_pad(n, wn), s), W)
-                                grid[pr] = _pad(_shift(_pad(p, wn), s), W)
-                            ag = _align_g(grid)
-                            if ag > best_ag:
-                                best_ag, best_grids = ag, [grid]
-                            elif ag == best_ag:
-                                best_grids.append(grid)
-                            return
-                        n, p = parts[i]
-                        wi = max(len(n), len(p))
-                        for s in range(0, W - wi + 1):
-                            rec(i + 1, placed + [(n, p, s)])
-                    rec(1, [(n0, p0, 0)])
-            for g in best_grids:
-                combined.append((g, best_ft))
+    seen_pack = set()
+    for rev, tord in packings:
+        buckets = tiles.assign_pairs(all_tiles, frozen, max(1, len(pairs)), wmin, skip,
+                                     typ_order=tord, reverse=rev)
+        key = tiles.fmt_bricks(buckets)
+        if key in seen_pack:
+            continue
+        seen_pack.add(key)
+        if len(seen_pack) == 1:
+            print(key)
+        elif hard:
+            print('hard packing reverse=%d order=%s' % (int(rev), tord))
+            print(key)
+        pair_lists = []
+        for pi, (nr, pr) in enumerate(pairs):
+            b = buckets[pi]
+            tn = b['N'] + [f['N'] for f in b['F']]
+            tp = b['P'] + [f['P'] for f in b['F']]
+            if not tn and not tp:
+                pair_lists.append([([], [], 'N')])
+                continue
+            cands, t1, t2 = _pair_search(tn, tp, b['F'], first, max_w, threshold, routability, end_nets,
+                                           score.rails_of(cell.pininfo), cap=bcap, packed=bruteForce,
+                                           half_dummy=halfDummy)
+            t1s += t1
+            t2s += t2
+            pair_lists.append(cands)
+        combined.extend(_combine_pairs(pair_lists, pairs, types, tops_k))
+    t_total = t1s + t2s
+    if hard:
+        print('hard beam=%s tops=%d packings=%d' % (bcap or 256, tops_k, len(seen_pack)))
 
     if not halfDummy and pairs:
         ok = []
@@ -236,7 +254,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             if good:
                 ok.append((grid, ft))
         combined = ok
-    SCORE_CAP = 1024
+    SCORE_CAP = 4096 if hard else 1024
     if len(combined) > SCORE_CAP:
         keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
         keyed.sort(key=lambda x: (x[0], x[1]))
@@ -285,8 +303,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     cx.close()
     n = len(pool)
     wm = min((m['W'] for m in pool), default=None)
-    print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d halfDummy=%d' % (
-        rid, cell.name, pack, wbest, used, n, int(halfDummy)))
+    print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d halfDummy=%d hard=%d' % (
+        rid, cell.name, pack, wbest, used, n, int(halfDummy), int(hard)))
     if wm is not None:
         slack = wm - wbest
         if slack > 0:
@@ -427,6 +445,8 @@ def main():
     g.add_argument('--bruteForce', action='store_true', help='no island bricks, enumerate')
     g.add_argument('--halfDummy', action='store_true',
                    help='allow a device facing a nil in the same NP-pair column (default: full dummy)')
+    g.add_argument('--hard', action='store_true',
+                   help='search harder: bigger beam, more pair stitches, both N/P first, extra pair packings')
     s = sub.add_parser('show')
     s.add_argument('--sort', default='cost')
     s.add_argument('--show', type=int, default=5, dest='nshow')
@@ -438,7 +458,8 @@ def main():
     a = p.parse_args()
     if a.cmd == 'gen':
         place(a.cdl, a.rows, a.pattern, a.tracks, a.threshold, a.routability,
-              a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce, halfDummy=a.halfDummy)
+              a.first, a.dumNumAdd, a.db, bruteForce=a.bruteForce, halfDummy=a.halfDummy,
+              hard=a.hard)
     else:
         show(a.db, a.sort, a.nshow, a.leaders, a.cell, a.run, a.dumNumAdd)
 

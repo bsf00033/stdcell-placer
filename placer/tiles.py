@@ -368,7 +368,7 @@ def _tile_comps(tile_list, skip_nets=()):
     return comps, isolates
 
 
-def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=()):
+def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=(), typ_order='NP', reverse=False):
     """Keep a forced-abut component on one pair. Isolated tiles round-robin.
     Brute singles of a series stack stay together; parallel P stripe by CDL order."""
     buckets = [{'N': [], 'P': [], 'F': []} for _ in range(n_pairs)]
@@ -387,10 +387,14 @@ def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=()):
         j = min(room if room else range(n_pairs), key=lambda k: load_of(k, typ))
         buckets[j][typ].append(t)
 
-    for typ in 'NP':
+    for typ in typ_order:
         rem = [t for t in tiles if t.typ == typ and t.frozen_id is None]
         comps, isolates = _tile_comps(rem, skip)
         comps.sort(key=lambda c: -sum(len(t.slots) for t in c))
+        isolates.sort(key=lambda x: -len(x.slots))
+        if reverse:
+            comps.reverse()
+            isolates.reverse()
         for comp in comps:
             size = sum(len(t.slots) for t in comp)
             room = [k for k in range(n_pairs)
@@ -402,7 +406,6 @@ def assign_pairs(tiles, frozen, n_pairs, width=None, skip_nets=()):
             else:
                 for t in comp:
                     place_one(t, typ)
-        isolates.sort(key=lambda t: -len(t.slots))
         for t in isolates:
             place_one(t, typ)
     return buckets
