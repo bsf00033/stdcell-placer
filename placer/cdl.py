@@ -46,9 +46,11 @@ def parse(path):
                     k, v = t.split('=', 1)
                     kv[k.upper()] = v
             mu = model.upper()
-            typ = 'N' if 'NMOS' in mu else 'P' if 'PMOS' in mu else None
-            if typ is None:
+            # technology-agnostic: first N or P in the model name (nch_lvt, pch, nmos, pfet, ...)
+            ni, pi = mu.find('N'), mu.find('P')
+            if ni < 0 and pi < 0:
                 raise ValueError('bad MOS model ' + model)
+            typ = 'N' if pi < 0 or (ni >= 0 and ni < pi) else 'P'
             devices.append(Device(parts[0], typ, d, g, s, b, kv.get('W', ''), kv.get('L', '')))
     if not name or not pininfo or not devices:
         raise ValueError('bad CDL')
