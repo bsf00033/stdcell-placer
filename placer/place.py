@@ -114,7 +114,7 @@ def _align_g(grid):
     return ag
 
 
-def _combine_pairs(pair_lists, pairs, types, tops_k=16):
+def _combine_pairs(pair_lists, pairs, types, tops_k=16, target_W=None):
     combined = []
     if not pair_lists or not all(pair_lists):
         return combined
@@ -123,6 +123,8 @@ def _combine_pairs(pair_lists, pairs, types, tops_k=16):
             grid = [None] * len(types)
             nr, pr = pairs[0]
             W = max(len(n), len(p))
+            if target_W:
+                W = max(W, target_W)
             grid[nr] = _pad(n, W)
             grid[pr] = _pad(p, W)
             for i, t in enumerate(types):
@@ -153,6 +155,8 @@ def _combine_pairs(pair_lists, pairs, types, tops_k=16):
             for prod in itertools.product(*rest) if rest else [()]:
                 parts = [(n0, p0)] + list(prod)
                 W = max(max(len(n), len(p)) for n, p in parts)
+                if target_W:
+                    W = max(W, target_W)
                 def rec(i, placed):
                     nonlocal best_ag, best_grids
                     if i == len(parts):
@@ -243,7 +247,8 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             t1s += t1
             t2s += t2
             pair_lists.append(cands)
-        combined.extend(_combine_pairs(pair_lists, pairs, types, tops_k))
+        combined.extend(_combine_pairs(pair_lists, pairs, types, tops_k,
+                                          target_W=(wmin + req) if req else None))
     t_total = t1s + t2s
     if hard:
         print('hard beam=%s tops=%d packings=%d' % (bcap or 256, tops_k, len(seen_pack)))
@@ -259,9 +264,13 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
             if good:
                 ok.append((grid, ft))
         combined = ok
+    prefer_wide = req > 0
     SCORE_CAP = 8192 if hard else 1024
     if len(combined) > SCORE_CAP:
-        keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
+        if prefer_wide:
+            keyed = [(-len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
+        else:
+            keyed = [(len(g[0]), -_align_g(g), g, ft) for g, ft in combined]
         keyed.sort(key=lambda x: (x[0], x[1]))
         combined = [(g, ft) for _, _, g, ft in keyed[:SCORE_CAP]]
     scored = []
@@ -270,7 +279,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         m['first_type'] = ft
         m['grid'] = {'types': types, 'cells': grid, 'pininfo': cell.pininfo,
                     'odd_nets': {k: list(v) for k, v in end_nets.items()}}
-        m['_cost'] = score.cost_tuple(m)
+        m['_cost'] = score.cost_tuple(m, prefer_wide=prefer_wide)
         scored.append(m)
     scored.sort(key=lambda m: m['_cost'])
 
@@ -288,7 +297,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
         print('dumNumAdd %d empty, using %d' % (req, used))
     by_cost = pool[:TABLE]
     extra = []
-    if pool:
+    if pool and not prefer_wide:
         mx = max(m['align_g'] for m in pool)
         extra = [m for m in pool if m['align_g'] == mx]
     seen, merged = set(), []
@@ -307,7 +316,7 @@ def place(cdl_path, rows=1, pattern='NPPN', tracks=4, threshold=0.0,
     rid = DBmod.save_run(cx, meta, pool)
     cx.close()
     n = len(pool)
-    wm = min((m['W'] for m in pool), default=None)
+    wm = pool[0]['W'] if pool else None
     print('run %d cell=%s Wmin pack=%d best=%d dumNumAdd_used=%d n=%d halfDummy=%d hard=%d' % (
         rid, cell.name, pack, wbest, used, n, int(halfDummy), int(hard)))
     if wm is not None:
@@ -333,7 +342,7 @@ SORT_KEYS = {
 }
 
 
-def _row_to_m(r, tracks=4):
+def _row_to_m(r, tracks=4, prefer_wide=False):
     grid = json.loads(r['grid_json'])
     m = {k: r[k] for k in ('W', 'ovf', 'cong', 'wl', 'align_g', 'align_sd', 'align_pg', 'route', 'first_type')}
     m['grid'] = grid
@@ -345,7 +354,7 @@ def _row_to_m(r, tracks=4):
         m.update(mm)
         m['grid'] = grid
         m['first_type'] = r['first_type']
-    m['_cost'] = score.cost_tuple(m)
+    m['_cost'] = score.cost_tuple(m, prefer_wide=prefer_wide)
     return m
 
 
@@ -354,7 +363,10 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
     cx = DBmod.connect(db)
     runrow, pls = DBmod.get_run(cx, run_id=run, cell=cell)
     cx.close()
-    ms = [_row_to_m(p, runrow['tracks']) for p in pls]
+    prefer_wide = (runrow['dumNumAdd_requested'] or 0) > 0
+    if dumNumAdd is not None:
+        prefer_wide = dumNumAdd > 0
+    ms = [_row_to_m(p, runrow['tracks'], prefer_wide) for p in pls]
     wmin = min((m['W'] for m in ms), default=0)
     # theoretical stored; use run's used unless tightening
     req = runrow['dumNumAdd_used'] if dumNumAdd is None else dumNumAdd
@@ -385,7 +397,7 @@ def show(db='place.db', sort='cost', nshow=5, leaders=False, cell=None, run=None
         all_t, _, _, _ = tiles.group(cell, types0)
         wbest = max(wbest, max((len(x.slots) for x in all_t), default=1))
         print(tiles.fmt_dummy_wmin(pack, wbest, dinfo))
-        ach = min((m['W'] for m in pool), default=None)
+        ach = pool[0]['W'] if pool else None
         if ach is not None:
             slack = ach - wbest
             if slack > 0:

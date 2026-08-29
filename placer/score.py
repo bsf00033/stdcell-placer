@@ -284,12 +284,16 @@ def metrics(rows, types, pininfo, tracks, end_nets, tg_names):
     }
 
 
-def cost_tuple(m):
-    # W, ovf, then rail-outside (first device). Never buy rail with extra col.
-    # dummy (odd S/D at boundary) before rail: saves a dummy column
-    return (m['W'], m['ovf'], -m.get('dummy', 0), -m.get('rail', 0), m['cong'], m['wl'],
+def cost_tuple(m, prefer_wide=False):
+    # dumNumAdd=0: W first (never buy rail with an extra col).
+    # dumNumAdd>0: extra pitches were requested, so ovf first then largest W
+    # (wider is easier to route). dummy/rail/align still break ties.
+    rest = (-m.get('dummy', 0), -m.get('rail', 0), m['cong'], m['wl'],
             -m['align_g'], -m['align_sd'], -m['align_pg'],
             -m.get('clk', 0), -m.get('pin', 0))
+    if prefer_wide:
+        return (m['ovf'], -m['W']) + rest
+    return (m['W'], m['ovf']) + rest
 
 
 def prune(paths, key, threshold, cap=256):
